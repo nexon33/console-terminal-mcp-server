@@ -10,7 +10,6 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { fileURLToPath } from 'url';
 
-const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -79,21 +78,6 @@ function releaseMutex() {
   }
 }
 
-// Function to check if Electron is already running
-async function isElectronRunning() {
-  try {
-    if (process.platform === 'win32') {
-      const { stdout } = await execAsync('tasklist /FI "IMAGENAME eq electron.exe"');
-      return stdout.toLowerCase().includes('electron.exe');
-    } else {
-      const { stdout } = await execAsync('ps aux | grep electron');
-      return stdout.toLowerCase().includes('electron') && !stdout.toLowerCase().includes('grep');
-    }
-  } catch (error) {
-    console.error('Error checking if Electron is running:', error);
-    return false;
-  }
-}
 
 // Function to start the Electron process
 async function startElectronProcess() {
@@ -105,7 +89,8 @@ async function startElectronProcess() {
     }
 
     // Get the path to electron from node_modules
-    const electronPath = path.join(__dirname, 'node_modules', '.bin', 'electron.cmd');
+    const electronExecutable = process.platform === 'win32' ? 'electron.cmd' : 'electron';
+    const electronPath = path.join(__dirname, 'node_modules', '.bin', electronExecutable);
 
     // Set up environment variables
     const env = {
