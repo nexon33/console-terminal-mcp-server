@@ -1,55 +1,131 @@
-# Model Context Protocol Server
+# Electron Terminal MCP Server
 
-This project implements a minimal server based on the Model Context Protocol (MCP) using TypeScript. The server is designed to handle requests according to the MCP specifications.
+## 1. Description
 
-## Project Structure
+In an ideal world vendors would provide their own MCP integration for the terminal, but in the meantime this project provides a Model Context Protocol (MCP) server that allows clients to interact with a system terminal running within an Electron application. It enables executing commands, managing terminal sessions, and retrieving output programmatically.
 
-```
-mcp-server
-├── src
-│   ├── server.ts        # Entry point of the MCP server
-│   └── types
-│       └── index.ts     # Type definitions for MCP
-├── package.json         # NPM package configuration
-├── tsconfig.json        # TypeScript configuration
-└── README.md            # Project documentation
-```
+The system consists of two main parts:
 
-## Setup Instructions
+*   **MCP Server (`index.js`):** A Node.js script that listens for MCP requests via standard input/output (stdio). It uses the `@modelcontextprotocol/sdk` and acts as a bridge to the Electron backend. It requires [`mcp-package.json`](mcp-package.json:1) to specify `"type": "module"`.
+*   **Electron Backend (`main.js`):** The main process for the Electron application. It runs an Express HTTP server (defaulting to port 3000) that the MCP server communicates with. This backend manages the actual terminal processes using `node-pty` within hidden `BrowserWindow` instances loading [`terminal.html`](terminal.html:0).
 
-1. **Clone the repository:**
-   ```
-   git clone <repository-url>
-   cd mcp-server
-   ```
+## 2. Installation
 
-2. **Install dependencies:**
-   ```
-   npm install
-   ```
+1.  **Prerequisites:** Ensure you have Node.js and npm installed.
+2.  **Clone:** Clone the repository if you haven't already.
+    ```bash
+    git clone <your-repository-url>
+    cd command-terminal-electron # Or your repository directory name
+    ```
+3.  **Install Dependencies:** Install Node modules for both the MCP server and the Electron app.
+    ```bash
+    npm install
+    ```
+4.  **Rebuild Native Modules:** Rebuild native modules (like `node-pty`) for Electron.
+    ```bash
+    node rebuild.js
+    ```
+    *(See [`rebuild.js`](rebuild.js:1) for details)*
 
-3. **Build the project:**
-   ```
-   npm run build
-   ```
+## 3. Usage
 
-4. **Run the server:**
-   ```
-   npm start
-   ```
+1.  **Start the MCP Server:**
+    Run the `index.js` script using Node.js. This will listen for MCP commands on stdio and automatically attempt to start the Electron backend process (`main.js`) if it's not already running and listening on the expected HTTP port.
+    ```bash
+    node index.js
+    ```
+    *Note: The Electron process runs hidden in the background.*
 
-## Usage
+2.  **Interacting via MCP:**
+    Clients connect to the `node index.js` process via stdio and use the `use_mcp_tool` command. The server name is defined in [`index.js`](index.js:182) as "Electron Terminal".
 
-Once the server is running, it will listen for incoming requests that conform to the Model Context Protocol. You can send requests to the server using tools like Postman or curl.
+    **Available Tools:**
 
-## Model Context Protocol
+    *   **`terminal_start`**: Creates a new terminal session and executes an initial command.
+        *   **Input:** `{ "command": "string" }`
+        *   **Output:** `{ "content": [...], "sessionId": "string" }`
+        ```xml
+        <use_mcp_tool>
+          <server_name>Electron Terminal</server_name>
+          <tool_name>terminal_start</tool_name>
+          <arguments>
+          {
+            "command": "ls -l"
+          }
+          </arguments>
+        </use_mcp_tool>
+        ```
 
-The Model Context Protocol defines a standard for communication between clients and servers, focusing on the structure of the data exchanged. This implementation adheres to the specifications outlined in the MCP documentation.
+    *   **`terminal_execute`**: Executes a command in an existing session.
+        *   **Input:** `{ "command": "string", "sessionId": "string" }`
+        *   **Output:** `{ "content": [...] }` (Session ID is included in the text content)
+        ```xml
+        <use_mcp_tool>
+          <server_name>Electron Terminal</server_name>
+          <tool_name>terminal_execute</tool_name>
+          <arguments>
+          {
+            "sessionId": "session_id_from_start",
+            "command": "pwd"
+          }
+          </arguments>
+        </use_mcp_tool>
+        ```
 
-## Contributing
+    *   **`terminal_get_output`**: Retrieves the accumulated output for a session.
+        *   **Input:** `{ "sessionId": "string" }`
+        *   **Output:** `{ "content": [...] }`
+        ```xml
+        <use_mcp_tool>
+          <server_name>Electron Terminal</server_name>
+          <tool_name>terminal_get_output</tool_name>
+          <arguments>
+          {
+            "sessionId": "session_id_from_start"
+          }
+          </arguments>
+        </use_mcp_tool>
+        ```
 
-Contributions are welcome! Please open an issue or submit a pull request for any improvements or bug fixes.
+    *   **`terminal_stop`**: Terminates a specific terminal session process.
+        *   **Input:** `{ "sessionId": "string" }`
+        *   **Output:** `{ "content": [...] }`
+        ```xml
+        <use_mcp_tool>
+          <server_name>Electron Terminal</server_name>
+          <tool_name>terminal_stop</tool_name>
+          <arguments>
+          {
+            "sessionId": "session_id_from_start"
+          }
+          </arguments>
+        </use_mcp_tool>
+        ```
 
-## License
+    *   **`terminal_get_sessions`**: Lists all currently active sessions managed by the Electron backend.
+        *   **Input:** `{}`
+        *   **Output:** `{ "content": [...] }` (Content contains a JSON string of active sessions)
+        ```xml
+        <use_mcp_tool>
+          <server_name>Electron Terminal</server_name>
+          <tool_name>terminal_get_sessions</tool_name>
+          <arguments>
+          {}
+          </arguments>
+        </use_mcp_tool>
+        ```
+
+## 4. Requirements
+
+*   Node.js (v20 or later recommended)
+*   npm
+*   Operating System compatible with Electron (Windows, macOS, Linux)
+
+## 5. Configuration
+
+*   **HTTP Port:** The internal HTTP server run by the Electron backend (`main.js`) defaults to port `3000`. The MCP server (`index.js`) expects to connect to this port. You can change the port used by the Electron backend by setting the `PORT` environment variable *before* the Electron process is launched (e.g., by modifying [`index.js`](index.js:20) or the way the Electron process is started if not launched automatically by `index.js`).
+    *Example (modifying `index.js`):* Change line 20 in [`index.js`](index.js:20) from `3000` to your desired port.
+
+## 6. License
 
 This project is licensed under the MIT License. See the LICENSE file for details.
