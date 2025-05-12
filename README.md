@@ -6,10 +6,20 @@ In an ideal world vendors would provide their own MCP integration for the termin
 
 The system consists of two main parts:
 
-*   **MCP Server (`index.js`):** A Node.js script that listens for MCP requests via standard input/output (stdio). It uses the `@modelcontextprotocol/sdk` and acts as a bridge to the Electron backend. It requires [`mcp-package.json`](mcp-package.json:1) to specify `"type": "module"`.
-*   **Electron Backend (`main.js`):** The main process for the Electron application. It runs an Express HTTP server (defaulting to port 3000) that the MCP server communicates with. This backend manages the actual terminal processes using `node-pty` within hidden `BrowserWindow` instances loading [`terminal.html`](terminal.html:0).
+*   **MCP Server (`index.js`):** A Node.js script that listens for MCP requests via standard input/output (stdio). It uses the `@modelcontextprotocol/sdk` and acts as a bridge to the Electron backend. It automatically starts the Electron backend if it's not already running. It requires [`mcp-package.json`](mcp-package.json:1) to specify `"type": "module"`.
+*   **Electron Backend (`main.js`):** The main process for the Electron application. It runs an Express HTTP server (defaulting to port 3000) that the MCP server (`index.js`) communicates with for health checks and API calls. This backend manages the actual terminal processes using `node-pty` within hidden `BrowserWindow` instances loading [`terminal.html`](terminal.html:0).
 
-## 2. Installation
+## 2. Screenshots
+
+Here's how the terminal interaction looks within a client like Claude Desktop:
+
+**Claude Desktop Window with Terminal Output:**
+![Claude Desktop Window with Terminal Output](claude-desktop-window.png)
+
+**Individual Electron Terminal Window:**
+![Electron Terminal Window](terminal-window.png)
+
+## 3. Installation
 
 1.  **Prerequisites:** Ensure you have Node.js and npm installed.
 2.  **Clone:** Clone the repository if you haven't already.
@@ -34,7 +44,7 @@ The system consists of two main parts:
     ```bash
     node index.js
     ```
-    *Note: The Electron process runs hidden in the background.*
+    *Note: The Electron process runs hidden in the background and automatically gets (re)started whenever its needed and will always be reused if possible.*
 
 2.  **Interacting via MCP:**
     Clients connect to the `node index.js` process via stdio and use the `use_mcp_tool` command. The server name is defined in [`index.js`](index.js:182) as "Electron Terminal".
@@ -115,17 +125,21 @@ The system consists of two main parts:
         </use_mcp_tool>
         ```
 
-## 4. Requirements
+## 5. Synergy with Filesystem MCP Server
 
-*   Node.js (v20 or later recommended)
+This Electron Terminal MCP server works very effectively in conjunction with the [Filesystem MCP Server](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem). You can use the Filesystem server to browse directories, read/write files, and then use this terminal server to execute commands within those directories or related to those files, providing a comprehensive remote development and interaction experience that works seamlessly together with for example the internet search function built into claude desktop.
+
+## 6. Requirements
+
+*   Node.js (v20 or later recommended, I use node 22)
 *   npm
 *   Operating System compatible with Electron (Windows, macOS, Linux)
 
-## 5. Configuration
+## 7. Configuration
 
-*   **HTTP Port:** The internal HTTP server run by the Electron backend (`main.js`) defaults to port `3000`. The MCP server (`index.js`) expects to connect to this port. You can change the port used by the Electron backend by setting the `PORT` environment variable *before* the Electron process is launched (e.g., by modifying [`index.js`](index.js:20) or the way the Electron process is started if not launched automatically by `index.js`).
-    *Example (modifying `index.js`):* Change line 20 in [`index.js`](index.js:20) from `3000` to your desired port.
+*   **HTTP Port (Electron Backend):** The internal HTTP server run by the Electron backend (`main.js`) defaults to port `3000`. The MCP server (`index.js`) expects to connect to this port for health checks and API calls. You can change the port used by the Electron backend by setting the `PORT` environment variable *before* the Electron process is launched by [`index.js`](index.js:109).
+    *   The `apiBaseUrl` in [`index.js`](index.js:21) is constructed using this port and should be consistent. If you change the port the Electron app listens on, ensure the logic in [`index.js`](index.js) that starts Electron and defines `apiBaseUrl` is also aware of this change.
 
-## 6. License
+## 8. License
 
 This project is licensed under the MIT License. See the LICENSE file for details.
