@@ -252,7 +252,7 @@ function createTerminalWindow(command, sessionId) {
 }
 
 // Helper function to wait for command completion
-async function waitForCommandCompletion(sessionId, timeout = 30000) {
+async function waitForCommandCompletion(sessionId) { // Removed timeout parameter
   return new Promise((resolve, reject) => {
     const session = terminals.get(sessionId);
     if (!session) {
@@ -263,76 +263,49 @@ async function waitForCommandCompletion(sessionId, timeout = 30000) {
           reject(new Error('Session not found'));
           return;
         }
-        startCompletionCheck(retrySession, resolve, reject, timeout);
+        startCompletionCheck(retrySession, resolve, reject); // Removed timeout argument
       }, 500);
       return;
     }
-    startCompletionCheck(session, resolve, reject, timeout);
+    startCompletionCheck(session, resolve, reject); // Removed timeout argument
   });
 }
 
 // Helper function to check command completion
-function startCompletionCheck(session, resolve, reject, timeout) {
-  const startTime = Date.now();
-  let lastOutputTime = Date.now();
-  let lastOutputLength = session.buffer.length;
-
+function startCompletionCheck(session, resolve, reject) { // Removed timeout parameter
   const checkInterval = setInterval(() => {
-    // Check if command has completed
-    if (session.status === 'completed' || session.status === 'terminated') {
+    // Check if the command's exit code has been determined
+    if (session.exitCode !== null) {
       clearInterval(checkInterval);
-      resolve({
-        sessionId: session.sessionId,
-        command: session.command,
-        output: session.buffer,
-        status: session.status,
-        startTime: session.startTime,
-        exitCode: session.exitCode
-      });
-      return;
-    }
 
-    // Check if output has stopped changing
-    const currentOutputLength = session.buffer.length;
-    if (currentOutputLength !== lastOutputLength) {
-      lastOutputLength = currentOutputLength;
-      lastOutputTime = Date.now();
-    } else if (Date.now() - lastOutputTime > 1000) {
-      // If no output change for 1 second, consider command complete
-      clearInterval(checkInterval);
-      // Don't change the session status to 'completed'
-      // Just note that the command is complete
-      const commandCompleteStatus = 'completed';
-      session.exitCode = session.exitCode !== undefined ? session.exitCode : EXIT_CODES.SUCCESS;
-      resolve({
-        sessionId: session.sessionId,
-        command: session.command,
-        output: session.buffer,
-        status: commandCompleteStatus,  // Return 'completed' for the command, not the session
-        startTime: session.startTime,
-        exitCode: session.exitCode
-      });
-      return;
-    }
-
-    // Check for timeout
-    if (Date.now() - startTime > timeout) {
-      clearInterval(checkInterval);
-      session.status = 'timeout';
-      session.exitCode = EXIT_CODES.TIMEOUT;
-      if (session.process) {
-        session.process.kill();
+      // Determine final status
+      // If the window was closed, session.status would likely be 'terminated'.
+      // Otherwise, it's a normal completion.
+      const finalStatus = (session.status === 'terminated') ? 'terminated' : 'completed';
+      
+      // Update session status if it was still 'running' and an exit code is now available
+      if (session.status === 'running') {
+        session.status = finalStatus;
       }
+
       resolve({
         sessionId: session.sessionId,
         command: session.command,
         output: session.buffer,
-        status: 'timeout',
+        status: finalStatus, // Use the determined final status
         startTime: session.startTime,
-        exitCode: EXIT_CODES.TIMEOUT,
-        error: 'Command execution timed out'
+        exitCode: session.exitCode
       });
+      return;
     }
+
+    // Safety check: if the session disappears from the map unexpectedly
+    if (!terminals.has(session.sessionId)) {
+        clearInterval(checkInterval);
+        reject(new Error(`Session ${session.sessionId} disappeared unexpectedly during completion check.`));
+        return;
+    }
+
   }, 100);
 }
 
