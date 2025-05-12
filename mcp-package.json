@@ -1,0 +1,12 @@
+{
+  "name": "mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for Electron Terminal",
+  "type": "module",
+  "main": "index.js",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.11.2",
+    "axios": "^1.9.0",
+    "zod": "^3.24.4"
+  }
+} 

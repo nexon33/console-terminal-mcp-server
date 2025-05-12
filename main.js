@@ -37,6 +37,11 @@ apiServer.use(cors());
 apiServer.use(bodyParser.json());
 apiServer.use(securityMiddleware);
 
+// Add health check endpoint
+apiServer.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 // Create a 1x1 transparent PNG for the tray icon
 const emptyPng = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/w8AAn8B9p6Q2wAAAABJRU5ErkJggg==',
