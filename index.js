@@ -105,7 +105,7 @@ async function startElectronProcess() {
     }
 
     // Get the path to electron from node_modules
-    const electronPath = path.join(process.cwd(), 'node_modules', '.bin', 'electron.cmd');
+    const electronPath = path.join(__dirname, 'node_modules', '.bin', 'electron.cmd');
 
     // Set up environment variables
     const env = {
@@ -118,14 +118,14 @@ async function startElectronProcess() {
 
     console.error('Starting Electron process');
 
-    // Use cmd.exe to run electron on Windows
-    const electronProcess = spawn('npx', ['electron', 'C:\\Users\\adria\\Documents\\ClaudeSandbox\\mcp-server'], {
+    // Use npx to run electron, hiding the window with windowsHide and shell: true
+    const electronProcess = spawn(electronPath, [path.resolve(__dirname)], {
       detached: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['ignore', 'pipe', 'pipe'], // Keep stdio pipes for logging
       cwd: process.cwd(),
       env: env,
-      windowsHide: true,
-      shell: true
+      windowsHide: true, // Ensure the window is hidden
+      shell: true // Use shell to execute npx correctly
     });
 
     // Log any output from the electron process
