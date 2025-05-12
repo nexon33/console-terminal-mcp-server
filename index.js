@@ -104,8 +104,10 @@ async function startElectronProcess() {
     console.error('Starting Electron process');
 
     // Use npx to run electron, hiding the window with windowsHide and shell: true
-    const electronProcess = spawn(electronPath, [path.resolve(__dirname)], {
-      detached: true,
+    // Corrected spawn call: path.resolve(__dirname) is now an argument to electronPath
+    //const electronProcess = spawn("cmd.exe", ['/c','/s', electronPath, path.resolve(__dirname)], {
+      const electronProcess = spawn(electronPath, [path.resolve(__dirname)], {
+    detached: true,
       stdio: ['ignore', 'pipe', 'pipe'], // Keep stdio pipes for logging
       cwd: process.cwd(),
       env: env,
@@ -207,7 +209,7 @@ server.tool(
           text: `Session ID: ${result.sessionId}\n\n ${cleanOutput}`,
           exitCode: result.exitCode
         }],
-        sessionId: result.sessionId
+        //sessionId: result.sessionId
       };
     } catch (error) {
       const errorSessionId = error.response?.data?.sessionId || null;

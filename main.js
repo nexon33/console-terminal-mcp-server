@@ -1,10 +1,16 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } = require('electron');
-const express = require('express');
-const cors = require('cors');
-const bodyParser = require('body-parser');
-const path = require('path');
-const os = require('os');
-const pty = require('node-pty');
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'electron';
+import express from 'express';
+import cors from 'cors';
+import bodyParser from 'body-parser';
+import path from 'path';
+import os from 'os';
+import { spawn as ptySpawn } from 'node-pty'; // Import only the spawn function
+import { fileURLToPath } from 'url';
+// Removed MCP server import: import mcpServerSingleton from './mcp-server.js';
+
+// Get the directory name in ES module scope
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const DEBUG = true;
 
@@ -49,7 +55,7 @@ const emptyPng = Buffer.from(
 );
 const emptyIcon = nativeImage.createFromBuffer(emptyPng);
 let tray = null;
-let mcpServer = null;
+// Removed: let mcpServer = null;
 
 // Initialize Electron app
 app.whenReady().then(() => {
@@ -59,17 +65,7 @@ app.whenReady().then(() => {
   apiServer.listen(PORT, () => {
     //console.log(`API server listening on port ${PORT}`);
 
-    // Only initialize MCP server after API server is up
-    if (!mcpServer) {
-      // Use the singleton MCP server and random port
-      mcpServer = require('./mcp-server');
-      mcpServer.start(); // Use random available port
-      setTimeout(() => {
-        const port = mcpServer.getPort();
-        //console.log(`MCP server actual port: ${port}`);
-        // Optionally, write port to a file for test clients
-      }, 500);
-    }
+    // MCP Server is no longer started here. It runs standalone.
   });
 
   // Create tray icon using the transparent icon
@@ -101,7 +97,7 @@ function createTerminalWindow(command, sessionId) {
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js') // Uses the __dirname defined above
     }
   });
 
@@ -132,14 +128,35 @@ function createTerminalWindow(command, sessionId) {
     }
 
     try {
-      // Start the terminal process
-      const term = pty.spawn(shell, shellArgs, {
+      // Prepare options object
+      const options = {
         name: 'xterm-color',
         cols: 80,
         rows: 30,
         cwd: process.env.HOME || process.env.USERPROFILE,
         env: process.env
-      });
+      };
+
+      // --- Runtime Type Validation ---
+      if (typeof shell !== 'string') {
+        throw new Error(`ptySpawn Pre-check Failed: 'shell' must be a string, got ${typeof shell}`);
+      }
+      // node-pty allows args to be string or string[], we expect array here based on prior logic
+      if (!Array.isArray(shellArgs)) {
+         console.warn(`ptySpawn Pre-check Warning: 'shellArgs' was expected to be an array, but got ${typeof shellArgs}. Proceeding cautiously.`);
+         // If it MUST be an array based on your logic, throw here instead:
+         // throw new Error(`ptySpawn Pre-check Failed: 'shellArgs' must be an array, got ${typeof shellArgs}`);
+      }
+      if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+         // This is the core check for the error message we are seeing
+        throw new Error(`ptySpawn Pre-check Failed: 'options' must be an object, got ${typeof options}${Array.isArray(options) ? ' (Array)' : ''}`);
+      }
+      // --- End Validation ---
+
+      console.log(`DEBUG: About to call ptySpawn with shell='${shell}', args=${JSON.stringify(shellArgs)}, options=${JSON.stringify(options)}`); // Single log line before call
+
+      // Start the terminal process using the imported spawn function
+      const term = ptySpawn(shell, shellArgs, options);
 
       // Update the session with the process and running status
       const session = terminals.get(sessionId);
@@ -572,14 +589,5 @@ app.on('before-quit', () => {
       }
     }
     terminals.delete(sessionId);
-  }
-
-  // Stop MCP server
-  if (mcpServer) {
-    try {
-      mcpServer.stop();
-    } catch (error) {
-      console.error('Error stopping MCP server:', error);
-    }
   }
 });
