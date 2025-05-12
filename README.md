@@ -137,8 +137,56 @@ This Electron Terminal MCP server works very effectively in conjunction with the
 
 ## 7. Configuration
 
-*   **HTTP Port (Electron Backend):** The internal HTTP server run by the Electron backend (`main.js`) defaults to port `3000`. The MCP server (`index.js`) expects to connect to this port for health checks and API calls. You can change the port used by the Electron backend by setting the `PORT` environment variable *before* the Electron process is launched by [`index.js`](index.js:109).
-    *   The `apiBaseUrl` in [`index.js`](index.js:21) is constructed using this port and should be consistent. If you change the port the Electron app listens on, ensure the logic in [`index.js`](index.js) that starts Electron and defines `apiBaseUrl` is also aware of this change.
+### Claude Desktop MCP Server Configuration
+
+#### Location
+
+The `claude_desktop_config.json` file should be placed in your user's AppData directory:
+
+- **Windows:**
+  `C:\Users\<username>\AppData\Roaming\Claude\claude_desktop_config.json`
+
+This file is used by Claude Desktop to discover and configure external MCP servers.
+
+#### Purpose and Structure
+
+The configuration file defines MCP servers that Claude Desktop can launch and connect to. Each server entry specifies how to start the server process.
+
+- **`mcpServers`**:
+  An object where each key is a server name and the value is its launch configuration.
+
+- **Server Configuration Example (`command-terminal`)**:
+  - **`command`**: The executable to run (e.g., `node` for Node.js servers).
+  - **`args`**: An array of arguments passed to the command (e.g., the path to your MCP server script).
+
+#### Example
+
+```json
+{
+  "mcpServers": {
+    "command-terminal": {
+      "command": "node",
+      "args": [
+        "C:\\Path\\to\\index.js"
+      ]
+    }
+  }
+}
+```
+
+#### Field Explanations
+
+- **`mcpServers`**:
+  Top-level object mapping server names to their configurations.
+
+- **`command-terminal`**:
+  Example server name. You can define multiple servers in this object.
+
+- **`command`**:
+  The executable used to launch the MCP server.
+
+- **`args`**:
+  Arguments passed to the command, such as the path to your server script.
 
 ## 8. License
 
