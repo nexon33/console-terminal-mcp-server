@@ -72,11 +72,11 @@ server.tool(
     // Return both output and window creation confirmation
     return {
       content: [
-        { type: "text", text: output.stdout },
+        { type: "text", text: output.stdout,
+          sessionId: sid,
+          exitCode: output.exitCode },
         ...(output.stderr ? [{ type: "text", text: output.stderr }] : [])
-      ],
-      sessionId: sid,
-      exitCode: output.exitCode
+      ]
     };
   }
 );

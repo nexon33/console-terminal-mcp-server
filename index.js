@@ -106,7 +106,7 @@ async function startElectronProcess() {
 
     // Get the path to electron from node_modules
     const electronPath = path.join(process.cwd(), 'node_modules', '.bin', 'electron.cmd');
-    
+
     // Set up environment variables
     const env = {
       ...process.env,
@@ -117,7 +117,7 @@ async function startElectronProcess() {
     };
 
     console.error('Starting Electron process');
-    
+
     // Use cmd.exe to run electron on Windows
     const electronProcess = spawn('npx', ['electron', 'C:\\Users\\adria\\Documents\\ClaudeSandbox\\mcp-server'], {
       detached: true,
@@ -146,17 +146,17 @@ async function startElectronProcess() {
       console.error(`Electron process exited with code ${code} and signal ${signal}`);
       releaseMutex();
     });
-    
+
     // Don't unref the process immediately to ensure it starts properly
     setTimeout(() => {
       electronProcess.unref();
     }, 1000);
-    
+
     // Wait for server to be ready
     return new Promise((resolve, reject) => {
       let attempts = 0;
       const maxAttempts = 60;
-      
+
       const checkServer = async () => {
         try {
           if (await isServerRunning()) {
@@ -199,12 +199,48 @@ const server = new McpServer({
   version: "1.0.0"
 });
 
+// Tool: terminal/initialize
+server.tool(
+  "terminal_start",
+  {
+    command: z.string()
+  },
+  async ({ command }) => {
+    try {
+      // Check if server is running, start if not
+      if (!(await isServerRunning())) {
+        await startElectronProcess();
+      }
+      // Create a new session
+      const response = await axios.post(`${apiBaseUrl}/execute`, { command });
+      const result = response.data;
+      // Clean up terminal output by removing ANSI escape sequences
+      const cleanOutput = result.output.replace(/\x1B\[[0-9;]*[JKmsu]/g, '');
+      return {
+        content: [{
+          type: "text",
+          text: `Session ID: ${result.sessionId}\n\n ${cleanOutput}`,
+          exitCode: result.exitCode
+        }],
+        sessionId: result.sessionId
+      };
+    } catch (error) {
+      const errorSessionId = error.response?.data?.sessionId || null;
+      return {
+        content: [{
+          type: "text", text: `Session ID: ${errorSessionId}\n\n ${error.response?.data?.error || error.message}`,
+          exitCode: 1
+        }]
+      };
+    }
+  }
+);
 // Tool: terminal/execute
 server.tool(
   "terminal_execute",
   {
     command: z.string(),
-    sessionId: z.string().optional()
+    sessionId: z.string()
   },
   async ({ command, sessionId }) => {
     try {
@@ -214,25 +250,32 @@ server.tool(
       }
 
       let response;
-      if (sessionId) {
-        // Execute in existing session
-        response = await axios.post(`${apiBaseUrl}/execute/${sessionId}`, { command });
-      } else {
-        // Create new session
-        response = await axios.post(`${apiBaseUrl}/execute`, { command });
-      }
-      
+      //if (sessionId) {
+      // Execute in existing session
+      response = await axios.post(`${apiBaseUrl}/execute/${sessionId}`, { command });
+      //} else {
+      // Create new session
+      //  response = await axios.post(`${apiBaseUrl}/execute`, { command });
+      //}
+
       const result = response.data;
+      // Clean up terminal output by removing ANSI escape sequences
+      const cleanOutput = result.output.replace(/\x1B\[[0-9;]*[JKmsu]/g, '');
       return {
-        content: [{ type: "text", text: result.output }],
-        sessionId: result.sessionId,
-        exitCode: result.exitCode
+        content: [{
+          type: "text",
+          text: `Session ID: ${result.sessionId}\n\n ${cleanOutput}`,
+          exitCode: result.exitCode
+        }],
+
       };
     } catch (error) {
+      const errorSessionId = error.response?.data?.sessionId || sessionId || null;
       return {
-        content: [{ type: "text", text: error.response?.data?.error || error.message }],
-        sessionId: sessionId || null,
-        exitCode: 1
+        content: [{
+          type: "text", text: `Session ID: ${result.sessionId}\n\n ${error.response?.data?.error || error.message}`,
+          exitCode: 1
+        }]
       };
     }
   }
@@ -240,7 +283,7 @@ server.tool(
 
 // Tool: terminal/output
 server.tool(
-  "terminal_output",
+  "terminal_get_output",
   {
     sessionId: z.string()
   },
@@ -253,16 +296,21 @@ server.tool(
 
       const response = await axios.get(`${apiBaseUrl}/output/${sessionId}`);
       const result = response.data;
+      // Clean up terminal output by removing ANSI escape sequences
+      const cleanOutput = result.output.replace(/\x1B\[[0-9;]*[JKmsu]/g, '');
       return {
-        content: [{ type: "text", text: result.output }],
-        sessionId: result.sessionId,
-        exitCode: result.exitCode
+        content: [{
+          type: "text", text: `Session ID: ${result.sessionId}\n\n ${cleanOutput}`,
+          exitCode: result.exitCode
+        }]
       };
     } catch (error) {
+      const errorSessionId = error.response?.data?.sessionId || sessionId;
       return {
-        content: [{ type: "text", text: error.response?.data?.error || error.message }],
-        sessionId: sessionId,
-        exitCode: 1
+        content: [{
+          type: "text", text: `Session ID: ${result.sessionId}\n\n ${error.response?.data?.error || error.message}`,
+          exitCode: 1
+        }]
       };
     }
   }
@@ -284,15 +332,49 @@ server.tool(
       const response = await axios.post(`${apiBaseUrl}/stop/${sessionId}`);
       const result = response.data;
       return {
-        content: [{ type: "text", text: result.message }],
-        sessionId: sessionId,
-        exitCode: result.exitCode
+        content: [{
+          type: "text", text: `Session ID: ${result.sessionId}\n\n ${result.message}`,
+          exitCode: result.exitCode
+        }]
+      };
+    } catch (error) {
+      const errorSessionId = error.response?.data?.sessionId || sessionId;
+      return {
+        content: [{
+          type: "text", text: `Session ID: ${result.sessionId}\n\n ${error.response?.data?.error || error.message}`,
+          exitCode: 1
+        }]
+      };
+    }
+  }
+);
+
+// Tool: terminal/get_sessions
+
+server.tool(
+  "terminal_get_sessions",
+  {},
+  async () => {
+    try {
+      // Check if server is running, start if not
+      if (!(await isServerRunning())) {
+        await startElectronProcess();
+      }
+
+      const response = await axios.get(`${apiBaseUrl}/sessions`);
+      const result = response.data;
+      return {
+        content: [{
+          type: "text", text: `Active sessions:\n\n ${JSON.stringify(result, null, 2)}`,
+          exitCode: 0
+        }]
       };
     } catch (error) {
       return {
-        content: [{ type: "text", text: error.response?.data?.error || error.message }],
-        sessionId: sessionId,
-        exitCode: 1
+        content: [{
+          type: "text", text: `Error fetching sessions: ${error.message}`,
+          exitCode: 1
+        }]
       };
     }
   }

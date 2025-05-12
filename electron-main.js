@@ -11,6 +11,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 let tray, wss, guiPort, mainWindow;
 
+// Helper function to clean terminal output
+function cleanTerminalOutput(text) {
+  return text.toString()
+    //.replace(/\x1B\[[0-9;]*[JKmsu]/g, '')  // Remove ANSI escape sequences
+    //.replace(/\r\n/g, '\n')                 // Normalize line endings
+    //.replace(/\r/g, '\n');                  // Convert remaining CR to LF
+}
+
 // Only initialize once app is ready
 const LOCK_FILE = path.join(process.env.APPDATA || process.env.HOME, '.electron-gui-port.lock');
 
@@ -65,7 +73,8 @@ app.whenReady().then(() => {
           console.error('Error processing WebSocket message:', err);
           ws.send(JSON.stringify({
             type: 'error',
-            error: err.message
+            error: err.message,
+            sessionId: sessionId || null
           }));
         }
       });
@@ -128,9 +137,21 @@ function createTerminalWindow(command, sessionId, ws) {
     });
 
     // Handle terminal output
+    let output = '';
     term.process.onData(data => {
+      const cleanedData = cleanTerminalOutput(data);
+      
       if (!win.isDestroyed()) {
+        // Send raw data to terminal window
         win.webContents.send('terminal-output', data);
+        
+        // Accumulate cleaned output and send via WebSocket
+        output += cleanedData;
+        ws.send(JSON.stringify({
+          type: 'terminal-output',
+          sessionId: sessionId,
+          output: output//.replace(/PS [^>]*>|\s+$/g, '').trim()
+        }));
       }
     });
 
@@ -138,7 +159,8 @@ function createTerminalWindow(command, sessionId, ws) {
     term.process.write(`${command}\r`);
     ws.send(JSON.stringify({
       type: 'terminal-created',
-      sessionId: sessionId
+      sessionId: sessionId,
+      output: ''
     }));
   });
 
