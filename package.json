@@ -1,0 +1,33 @@
+{
+  "name": "command-terminal-electron",
+  "version": "1.0.0",
+  "description": "Electron application with integrated terminal and MCP server",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": [
+    "electron",
+    "terminal",
+    "llm",
+    "command"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.11.2",
+    "@xterm/addon-fit": "^0.9.0",
+    "@xterm/xterm": "^5.5.0",
+    "axios": "^1.9.0",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "node-pty": "^v1.1.0-beta34",
+    "ws": "^8.18.2",
+    "xterm": "^5.3.0",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "electron": "^36.2.0"
+  }
+}
