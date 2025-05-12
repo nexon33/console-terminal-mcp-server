@@ -18,6 +18,7 @@ const DEBUG = true;
 // Store active terminal sessions
 const terminals = new Map();
 let windowCounter = 0;
+const pendingCompletionSignals = new Map(); // New map for early resolution
 
 // Constants for exit codes
 const EXIT_CODES = {
@@ -110,7 +111,9 @@ function createTerminalWindow(command, sessionId) {
     startTime: new Date(),
     status: 'initializing',
     sessionId: sessionId,
-    exitCode: null
+    exitCode: null,
+    lastUnblockedOutput: null, // Initialize new property
+    lastUnblockedOutputTimestamp: null // Initialize new property
   });
 
   // Load the terminal UI
@@ -252,58 +255,72 @@ function createTerminalWindow(command, sessionId) {
 }
 
 // Helper function to wait for command completion
-async function waitForCommandCompletion(sessionId) { // Removed timeout parameter
+async function waitForCommandCompletion(sessionId) {
   return new Promise((resolve, reject) => {
+    pendingCompletionSignals.set(sessionId, { resolve, reject }); // Store signals
+
     const session = terminals.get(sessionId);
     if (!session) {
       // Add a small delay to allow session initialization
       setTimeout(() => {
         const retrySession = terminals.get(sessionId);
         if (!retrySession) {
-          reject(new Error('Session not found'));
+          if (pendingCompletionSignals.has(sessionId)) { // Check if still pending
+            pendingCompletionSignals.get(sessionId).reject(new Error('Session not found after retry'));
+            pendingCompletionSignals.delete(sessionId);
+          }
           return;
         }
-        startCompletionCheck(retrySession, resolve, reject); // Removed timeout argument
+        startCompletionCheck(retrySession, sessionId); // Pass sessionId
       }, 500);
       return;
     }
-    startCompletionCheck(session, resolve, reject); // Removed timeout argument
+    startCompletionCheck(session, sessionId); // Pass sessionId
   });
 }
 
 // Helper function to check command completion
-function startCompletionCheck(session, resolve, reject) { // Removed timeout parameter
+function startCompletionCheck(session, sessionId) { // Added sessionId parameter
   const checkInterval = setInterval(() => {
     // Check if the command's exit code has been determined
     if (session.exitCode !== null) {
       clearInterval(checkInterval);
-
-      // Determine final status
-      // If the window was closed, session.status would likely be 'terminated'.
-      // Otherwise, it's a normal completion.
-      const finalStatus = (session.status === 'terminated') ? 'terminated' : 'completed';
-      
-      // Update session status if it was still 'running' and an exit code is now available
-      if (session.status === 'running') {
-        session.status = finalStatus;
+      if (pendingCompletionSignals.has(sessionId)) {
+        const { resolve } = pendingCompletionSignals.get(sessionId);
+        const finalStatus = (session.status === 'terminated') ? 'terminated' : 'completed';
+        if (session.status === 'running') {
+          session.status = finalStatus;
+        }
+        resolve({
+          sessionId: session.sessionId,
+          command: session.command,
+          output: session.buffer, // Full buffer on normal completion
+          status: finalStatus,
+          startTime: session.startTime,
+          exitCode: session.exitCode,
+          lastUnblockedOutput: session.lastUnblockedOutput,
+          lastUnblockedOutputTimestamp: session.lastUnblockedOutputTimestamp
+        });
+        pendingCompletionSignals.delete(sessionId);
       }
-
-      resolve({
-        sessionId: session.sessionId,
-        command: session.command,
-        output: session.buffer,
-        status: finalStatus, // Use the determined final status
-        startTime: session.startTime,
-        exitCode: session.exitCode
-      });
       return;
     }
 
     // Safety check: if the session disappears from the map unexpectedly
     if (!terminals.has(session.sessionId)) {
-        clearInterval(checkInterval);
+      clearInterval(checkInterval);
+      if (pendingCompletionSignals.has(sessionId)) {
+        const { reject } = pendingCompletionSignals.get(sessionId);
         reject(new Error(`Session ${session.sessionId} disappeared unexpectedly during completion check.`));
-        return;
+        pendingCompletionSignals.delete(sessionId);
+      }
+      return;
+    }
+
+    // If the promise was already resolved by unblock, clear interval and stop
+    if (!pendingCompletionSignals.has(sessionId) && session.status === 'unblocked_output_sent') {
+       clearInterval(checkInterval);
+       return;
     }
 
   }, 100);
@@ -433,7 +450,8 @@ apiServer.get('/sessions', (req, res) => {
       command: session.command,
       status: session.status,
       startTime: session.startTime,
-      exitCode: session.exitCode
+      exitCode: session.exitCode,
+      lastUnblockedOutputTimestamp: session.lastUnblockedOutputTimestamp // Add timestamp here for quick check
     }));
 
     res.json({ sessions });
@@ -456,10 +474,12 @@ apiServer.get('/output/:sessionId', (req, res) => {
     res.json({
       sessionId,
       command: session.command,
-      output: session.buffer,
+      output: session.buffer, // This is the full buffer
       status: session.status,
       startTime: session.startTime,
-      exitCode: session.exitCode
+      exitCode: session.exitCode,
+      lastUnblockedOutput: session.lastUnblockedOutput, // Include unblocked output
+      lastUnblockedOutputTimestamp: session.lastUnblockedOutputTimestamp // And its timestamp
     });
   } catch (error) {
     console.error('Error getting output:', error);
@@ -502,6 +522,45 @@ ipcMain.on('terminal-input', (event, { sessionId, input }) => {
   }
 });
 
+// Handle unblocked terminal output
+ipcMain.on('terminal-send-current-output', (event, { sessionId, output }) => {
+ if (DEBUG) {
+   console.log(`Received unblocked output for session ${sessionId}. Output length: ${output.length}`);
+ }
+ try {
+   const session = terminals.get(sessionId);
+   if (session) {
+     session.lastUnblockedOutput = output;
+     session.lastUnblockedOutputTimestamp = new Date();
+     // For now, we just log. The actual "sending back" to the initiating MCP request
+     // would require modifying how the /execute or /output endpoints work,
+     // or a new mechanism for Claude Desktop to fetch this.
+     console.log(`[Session ${sessionId}] Unblocked output received. Length: ${output.length}`);
+ 
+     // Check if there's a pending completion promise for this session
+     if (pendingCompletionSignals.has(sessionId)) {
+       const { resolve } = pendingCompletionSignals.get(sessionId);
+       session.status = 'unblocked_output_sent'; // Set a new status
+       resolve({
+         sessionId: session.sessionId,
+         command: session.command,
+         output: session.lastUnblockedOutput, // Send only the unblocked output
+         status: session.status,
+         startTime: session.startTime,
+         exitCode: null, // Exit code is not yet known
+         lastUnblockedOutput: session.lastUnblockedOutput,
+         lastUnblockedOutputTimestamp: session.lastUnblockedOutputTimestamp
+       });
+       pendingCompletionSignals.delete(sessionId); // Clean up
+       console.log(`[Session ${sessionId}] Early resolve triggered by unblock.`);
+     }
+   } else {
+     console.warn(`Session ${sessionId} not found for unblocked output.`);
+   }
+ } catch (error) {
+   console.error(`Error handling unblocked output for session ${sessionId}:`, error);
+ }
+});
 ipcMain.on('terminal-resize', (event, { sessionId, cols, rows }) => {
   try {
     if (terminals.has(sessionId)) {

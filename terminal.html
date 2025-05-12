@@ -41,6 +41,26 @@
       font-size: 12px;
     }
 
+    .action-btn { /* New style for general action buttons */
+     background-color: #4CAF50; /* Green */
+     color: white;
+     border: none;
+     padding: 4px 8px;
+     cursor: pointer;
+     border-radius: 3px;
+     transition: background-color 0.2s;
+     margin-left: 10px; /* Add some margin */
+   }
+
+   .action-btn:hover {
+     background-color: #45a049;
+   }
+
+   .action-btn:disabled {
+     background-color: #666;
+     cursor: not-allowed;
+   }
+
     .cancel-btn {
       background-color: #f44336;
       color: white;
@@ -76,6 +96,10 @@
   <div id="error-message" class="error-message"></div>
   <div class="statusbar">
     <span id="session-info">Terminal Session</span>
+    <div>
+       <button id="send-output-btn" class="action-btn">Unblock MCP request</button>
+       <!-- Existing cancel button can be added here if needed, or styled as action-btn with different color -->
+    </div>
   </div>
 
   <script src="node_modules/@xterm/xterm/lib/xterm.js"></script>
@@ -157,6 +181,43 @@
     window.ipcRenderer.on('terminal-error', (event, error) => {
       showError('Terminal error: ' + error);
     });
+
+    // Handle "Send Current Output" button click
+    const sendOutputBtn = document.getElementById('send-output-btn');
+
+    if (sendOutputBtn) {
+      sendOutputBtn.addEventListener('click', () => {
+        if (!sessionId) {
+          showError("Session not initialized. Cannot send output.");
+          return;
+        }
+        if (!isProcessRunning) {
+           // Optionally disable the button or show a message if process isn't running
+           // For now, we allow sending output even if the process has exited,
+           // as the buffer might still contain useful information.
+        }
+
+        const buffer = term.buffer.active;
+        let output = '';
+        for (let i = 0; i < buffer.length; i++) {
+          const line = buffer.getLine(i);
+          if (line) {
+            output += line.translateToString(true) + '\r\n'; // true to include wide chars, keep \r\n for lines
+          }
+        }
+
+        if (output.length > 0) {
+          window.ipcRenderer.send('terminal-send-current-output', { sessionId, output });
+          // Optionally, provide feedback to the user that output was sent
+          // term.write("\r\n\x1b[32m[Current output sent to Claude]\x1b[0m\r\n");
+        } else {
+          // term.write("\r\n\x1b[33m[No output to send]\x1b[0m\r\n");
+        }
+      });
+    } else {
+       console.error("Send Output button not found");
+    }
+
   </script>
 </body>
 
