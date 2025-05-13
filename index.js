@@ -10,6 +10,7 @@ import os from 'os';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { fileURLToPath } from 'url';
+import lockfile from 'proper-lockfile';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -49,7 +50,7 @@ const port = process.env.PORT || 3000;
 apiBaseUrl += `:${port}`;
 
 // Mutex file path
-const MUTEX_FILE = path.join(os.tmpdir(), 'electron-mcp-mutex');
+const MUTEX_FILE = path.join(os.tmpdir(), 'electron-mcp-mutex.lock');
 
 // Function to check if server is running
 async function isServerRunning() {
@@ -62,47 +63,38 @@ async function isServerRunning() {
 }
 
 // Function to acquire mutex
-function acquireMutex() {
+async function acquireMutex() {
   try {
-    // Try to create the mutex file
-    fs.writeFileSync(MUTEX_FILE, process.pid.toString(), { flag: 'wx' });
+    await lockfile.lock(MUTEX_FILE, {
+      retries: {
+        // Retry acquiring the lock for up to 10 seconds
+        retries: 10,
+        factor: 2,
+        minTimeout: 100,
+        maxTimeout: 1000,
+        randomize: true
+      },
+      stale: 5000, // Consider lock stale after 5 seconds
+      update: 2000, // Update lock file timestamp every 2 seconds
+      realpath: false // Do not resolve the real path of the lock file
+    });
+    console.error('Mutex acquired successfully.');
     return true;
   } catch (error) {
-    if (error.code === 'EEXIST') {
-      // Mutex exists, check if process is still running
-      try {
-        const pid = parseInt(fs.readFileSync(MUTEX_FILE, 'utf8'));
-        try {
-          // Try to send signal 0 to check if process exists
-          process.kill(pid, 0);
-          return false; // Process is still running
-        } catch (e) {
-          // Process doesn't exist, we can take the mutex
-          fs.unlinkSync(MUTEX_FILE);
-          return acquireMutex();
-        }
-      } catch (e) {
-        // Can't read mutex file, try to remove it
-        try {
-          fs.unlinkSync(MUTEX_FILE);
-          return acquireMutex();
-        } catch (e) {
-          return false;
-        }
-      }
-    }
+    console.error('Failed to acquire mutex:', error.message);
     return false;
   }
 }
 
 // Function to release mutex
-function releaseMutex() {
+async function releaseMutex() {
   try {
     if (fs.existsSync(MUTEX_FILE)) {
-      fs.unlinkSync(MUTEX_FILE);
+      await lockfile.unlock(MUTEX_FILE);
+      console.error('Mutex released successfully.');
     }
   } catch (error) {
-    console.error('Error releasing mutex:', error);
+    console.error('Error releasing mutex:', error.message);
   }
 }
 
@@ -111,8 +103,8 @@ function releaseMutex() {
 async function startElectronProcess() {
   try {
     // Try to acquire mutex
-    if (!acquireMutex()) {
-      console.error('Electron process is already running');
+    if (!(await acquireMutex())) {
+      console.error('Electron process is already running or failed to acquire mutex.');
       return;
     }
 
@@ -152,14 +144,14 @@ async function startElectronProcess() {
       console.error('Electron stderr:', data.toString());
     });
 
-    electronProcess.on('error', (error) => {
+    electronProcess.on('error', async (error) => {
       console.error('Failed to start Electron:', error);
-      releaseMutex();
+      await releaseMutex();
     });
 
-    electronProcess.on('exit', (code, signal) => {
+    electronProcess.on('exit', async (code, signal) => {
       console.error(`Electron process exited with code ${code} and signal ${signal}`);
-      releaseMutex();
+      await releaseMutex();
     });
 
     // Don't unref the process immediately to ensure it starts properly
@@ -181,7 +173,7 @@ async function startElectronProcess() {
             attempts++;
             console.error(`Waiting for server to start... (attempt ${attempts}/${maxAttempts})`);
             if (attempts >= maxAttempts) {
-              releaseMutex();
+              await releaseMutex();
               reject(new Error('Server failed to start within timeout period'));
               return;
             }
@@ -191,7 +183,7 @@ async function startElectronProcess() {
           console.error('Error checking server status:', error);
           attempts++;
           if (attempts >= maxAttempts) {
-            releaseMutex();
+            await releaseMutex();
             reject(new Error('Server failed to start within timeout period'));
             return;
           }
@@ -202,10 +194,37 @@ async function startElectronProcess() {
     });
   } catch (error) {
     console.error('Failed to start Electron process:', error);
-    releaseMutex();
+    await releaseMutex();
     throw error;
   }
 }
+
+// Ensure mutex is released on process exit
+process.on('exit', async () => {
+  await releaseMutex();
+});
+
+process.on('SIGINT', async () => {
+  await releaseMutex();
+  process.exit();
+});
+
+process.on('SIGTERM', async () => {
+  await releaseMutex();
+  process.exit();
+});
+
+process.on('uncaughtException', async (err) => {
+  console.error('Uncaught exception:', err);
+  await releaseMutex();
+  process.exit(1);
+});
+
+process.on('unhandledRejection', async (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  await releaseMutex();
+  process.exit(1);
+});
 
 // Create MCP server
 const server = new McpServer({
