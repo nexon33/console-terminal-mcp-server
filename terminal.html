@@ -133,7 +133,7 @@
       // Send new dimensions to main process
       if (sessionId) {
         const dimensions = term.getDimensions();
-        window.ipcRenderer.send('terminal-resize', {
+        window.electronAPI.send('terminal-resize', {
           sessionId: sessionId,
           cols: dimensions.cols,
           rows: dimensions.rows
@@ -148,7 +148,7 @@
     // Handle input from user
     term.onData(data => {
       if (isProcessRunning && sessionId) {
-        window.ipcRenderer.send('terminal-input', { sessionId, input: data });
+        window.electronAPI.send('pty-input', { sessionId, input: data });
       }
     });
 
@@ -160,25 +160,25 @@
     }
 
     // Receive session ID from main process
-    window.ipcRenderer.on('session-id', (event, id) => {
+    window.electronAPI.on('session-id', (id) => { // event argument is removed by contextBridge
       sessionId = id;
       document.getElementById('session-info').textContent = `Session: ${id}`;
     });
 
     // Receive terminal output from main process
-    window.ipcRenderer.on('terminal-output', (event, data) => {
+    window.electronAPI.on('pty-output', (data) => { // event argument is removed by contextBridge
       term.write(data);
     });
 
     // Handle terminal exit
-    window.ipcRenderer.on('terminal-exit', (event, exitCode) => {
+    window.electronAPI.on('terminal-exit', (exitCode) => { // event argument is removed by contextBridge
       isProcessRunning = false;
       term.write(`\r\n\nProcess exited with code ${exitCode}\r\n`);
       document.getElementById('session-info').textContent = `Session: ${sessionId} (Completed - Exit Code: ${exitCode})`;
     });
 
     // Handle terminal errors
-    window.ipcRenderer.on('terminal-error', (event, error) => {
+    window.electronAPI.on('terminal-error', (error) => { // event argument is removed by contextBridge
       showError('Terminal error: ' + error);
     });
 
@@ -207,7 +207,7 @@
         }
 
         if (output.length > 0) {
-          window.ipcRenderer.send('terminal-send-current-output', { sessionId, output });
+          window.electronAPI.send('terminal-send-current-output', { sessionId, output });
           // Optionally, provide feedback to the user that output was sent
           // term.write("\r\n\x1b[32m[Current output sent to Claude]\x1b[0m\r\n");
         } else {

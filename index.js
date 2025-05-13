@@ -1,3 +1,4 @@
+import logger from './logger.js';
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -11,7 +12,6 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { fileURLToPath } from 'url';
 import * as lockfile from 'lockfile'; // Changed import
-import { promisify } from 'util'; // Ensure promisify is imported
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -70,7 +70,7 @@ const unlock = promisify(lockfile.unlock);
 // Function to acquire mutex
 async function acquireMutex() {
   try {
-    console.log(`Attempting to acquire mutex for file: ${MUTEX_FILE}`);
+    logger.info(`Attempting to acquire mutex for file: ${MUTEX_FILE}`);
     // Options for lockfile:
     // wait: time to wait for lock (ms) - e.g., 10 seconds total
     // stale: time lock is considered stale (ms) - e.g., 5 seconds
@@ -84,12 +84,12 @@ async function acquireMutex() {
       retryWait: 100   // Wait 100ms between retries (used if retries is an object, but pollPeriod covers this for simple retries)
     };
     await lock(MUTEX_FILE, lockOptions);
-    console.log('Mutex acquired successfully.');
+    logger.info('Mutex acquired successfully.');
     return true;
   } catch (error) {
-    console.error('Failed to acquire mutex:', error.message);
+    logger.error('Failed to acquire mutex:', error.message);
     if (error.code === 'EEXIST') {
-      console.error('Lock file already exists.');
+      logger.error('Lock file already exists.');
     }
     return false;
   }
@@ -102,16 +102,16 @@ async function releaseMutex() {
     // It's generally better to just attempt unlock and catch errors.
     // However, to maintain similar logging:
     if (fs.existsSync(MUTEX_FILE)) {
-      console.log(`Attempting to release mutex for file: ${MUTEX_FILE}`);
+      logger.info(`Attempting to release mutex for file: ${MUTEX_FILE}`);
       await unlock(MUTEX_FILE);
-      console.log('Mutex released successfully.');
+      logger.info('Mutex released successfully.');
     } else {
       // This case might not be strictly necessary if acquireMutex always creates one.
       // And if it doesn't exist, unlock would fail anyway.
-      console.log(`Mutex file ${MUTEX_FILE} not found, no release needed or already released.`);
+      logger.info(`Mutex file ${MUTEX_FILE} not found, no release needed or already released.`);
     }
   } catch (error) {
-    console.error('Error releasing mutex:', error.message);
+    logger.error('Error releasing mutex:', error.message);
     // Common errors: ENOENT (file not found), EPERM (not owner)
   }
 }
@@ -122,7 +122,7 @@ async function startElectronProcess() {
   try {
     // Try to acquire mutex
     if (!(await acquireMutex())) {
-      console.error('Electron process is already running or failed to acquire mutex.');
+      logger.error('Electron process is already running or failed to acquire mutex.');
       return;
     }
 
@@ -139,7 +139,7 @@ async function startElectronProcess() {
       NODE_ENV: 'development'
     };
 
-    console.error('Starting Electron process');
+    logger.error('Starting Electron process');
 
     // Use npx to run electron, hiding the window with windowsHide and shell: true
     // Corrected spawn call: path.resolve(__dirname) is now an argument to electronPath
@@ -155,20 +155,20 @@ async function startElectronProcess() {
 
     // Log any output from the electron process
     electronProcess.stdout.on('data', (data) => {
-      console.error('Electron stdout:', data.toString());
+      logger.error('Electron stdout:', data.toString());
     });
 
     electronProcess.stderr.on('data', (data) => {
-      console.error('Electron stderr:', data.toString());
+      logger.error('Electron stderr:', data.toString());
     });
 
     electronProcess.on('error', async (error) => {
-      console.error('Failed to start Electron:', error);
+      logger.error('Failed to start Electron:', error);
       await releaseMutex();
     });
 
     electronProcess.on('exit', async (code, signal) => {
-      console.error(`Electron process exited with code ${code} and signal ${signal}`);
+      logger.error(`Electron process exited with code ${code} and signal ${signal}`);
       await releaseMutex();
     });
 
@@ -185,11 +185,11 @@ async function startElectronProcess() {
       const checkServer = async () => {
         try {
           if (await isServerRunning()) {
-            console.error('Server is now running');
+            logger.error('Server is now running');
             resolve();
           } else {
             attempts++;
-            console.error(`Waiting for server to start... (attempt ${attempts}/${maxAttempts})`);
+            logger.error(`Waiting for server to start... (attempt ${attempts}/${maxAttempts})`);
             if (attempts >= maxAttempts) {
               await releaseMutex();
               reject(new Error('Server failed to start within timeout period'));
@@ -198,7 +198,7 @@ async function startElectronProcess() {
             setTimeout(checkServer, 1000);
           }
         } catch (error) {
-          console.error('Error checking server status:', error);
+          logger.error('Error checking server status:', error);
           attempts++;
           if (attempts >= maxAttempts) {
             await releaseMutex();
@@ -211,7 +211,7 @@ async function startElectronProcess() {
       checkServer();
     });
   } catch (error) {
-    console.error('Failed to start Electron process:', error);
+    logger.error('Failed to start Electron process:', error);
     await releaseMutex();
     throw error;
   }
@@ -233,13 +233,13 @@ process.on('SIGTERM', async () => {
 });
 
 process.on('uncaughtException', async (err) => {
-  console.error('Uncaught exception:', err);
+  logger.error('Uncaught exception:', err);
   await releaseMutex();
   process.exit(1);
 });
 
 process.on('unhandledRejection', async (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
   await releaseMutex();
   process.exit(1);
 });

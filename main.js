@@ -1,3 +1,4 @@
+import logger from './logger.js';
 import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'electron';
 import express from 'express';
 import cors from 'cors';
@@ -70,11 +71,11 @@ let tray = null;
 
 // Initialize Electron app
 app.whenReady().then(() => {
-  //console.log('Electron app is ready');
+  logger.info('Electron app is ready');
 
   // Start the API server
   apiServer.listen(PORT, () => {
-    //console.log(`API server listening on port ${PORT}`);
+    logger.info(`API server listening on port ${PORT}`);
 
     // MCP Server is no longer started here. It runs standalone.
   });
@@ -99,15 +100,15 @@ app.whenReady().then(() => {
 // Create a new terminal window for a command
 function createTerminalWindow(command, sessionId) {
   if (DEBUG) {
-    console.log(`Creating new terminal window for session ${sessionId} with command: ${command}`);
+    logger.info(`Creating new terminal window for session ${sessionId} with command: ${command}`);
   }
   const win = new BrowserWindow({
     width: 800,
     height: 600,
     title: `Terminal - ${command}`,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      nodeIntegration: false,
+      contextIsolation: true,
       preload: path.join(__dirname, 'preload.js') // Uses the __dirname defined above
     }
   });
@@ -156,7 +157,7 @@ function createTerminalWindow(command, sessionId) {
       }
       // node-pty allows args to be string or string[], we expect array here based on prior logic
       if (!Array.isArray(shellArgs)) {
-         console.warn(`ptySpawn Pre-check Warning: 'shellArgs' was expected to be an array, but got ${typeof shellArgs}. Proceeding cautiously.`);
+         logger.warn(`ptySpawn Pre-check Warning: 'shellArgs' was expected to be an array, but got ${typeof shellArgs}. Proceeding cautiously.`);
          // If it MUST be an array based on your logic, throw here instead:
          // throw new Error(`ptySpawn Pre-check Failed: 'shellArgs' must be an array, got ${typeof shellArgs}`);
       }
@@ -166,7 +167,7 @@ function createTerminalWindow(command, sessionId) {
       }
       // --- End Validation ---
 
-      console.log(`DEBUG: About to call ptySpawn with shell='${shell}', args=${JSON.stringify(shellArgs)}, options=${JSON.stringify(options)}`); // Single log line before call
+      logger.info(`DEBUG: About to call ptySpawn with shell='${shell}', args=${JSON.stringify(shellArgs)}, options=${JSON.stringify(options)}`); // Single log line before call
 
       // Start the terminal process using the imported spawn function
       const term = ptySpawn(shell, shellArgs, options);
@@ -185,7 +186,7 @@ function createTerminalWindow(command, sessionId) {
       // Handle terminal output
       term.onData(data => {
         if (win && !win.isDestroyed()) {
-          win.webContents.send('terminal-output', data);
+          win.webContents.send('pty-output', data);
         }
         const session = terminals.get(sessionId);
         if (session) {
@@ -209,7 +210,7 @@ function createTerminalWindow(command, sessionId) {
           // Don't set status to 'completed' if the terminal exits
           // Just record the exit code
           session.exitCode = session.exitCode !== null ? session.exitCode : exitCode;
-          console.log(`Terminal process exited for session ${sessionId} with code ${session.exitCode}`);
+          logger.info(`Terminal process exited for session ${sessionId} with code ${session.exitCode}`);
         }
         if (win && !win.isDestroyed()) {
           win.webContents.send('terminal-exit', session.exitCode);
@@ -231,7 +232,7 @@ function createTerminalWindow(command, sessionId) {
       // Tell window which session it's connected to
       win.webContents.send('session-id', sessionId);
     } catch (error) {
-      console.error('Failed to create terminal:', error);
+      logger.error('Failed to create terminal:', error);
       win.webContents.send('terminal-error', error.message);
       const session = terminals.get(sessionId);
       if (session) {
@@ -383,14 +384,14 @@ apiServer.post('/execute', async (req, res) => {
           error: error.message
         });
       } else {
-        console.error('Error executing command:', error);
+        logger.error('Error executing command:', error);
         sendErrorResponse(res, 500, error.message || 'Failed to execute command');
       }
     }
   } catch (error) {
-    console.error('Error executing command:', error);
+    logger.error('Error executing command:', error);
     // NOTE: Consider using a dedicated logging library (e.g., Winston, Pino) for more structured logging
-    // and easier debugging in production environments. This would replace console.error calls.
+    // and easier debugging in production environments. This would replace logger.error calls.
     sendErrorResponse(res, 500, error.message || 'Failed to execute command');
   }
 });
@@ -455,12 +456,12 @@ apiServer.post('/execute/:sessionId', async (req, res) => {
           error: error.message
         });
       } else {
-        console.error('Error executing command in session:', error);
+        logger.error('Error executing command in session:', error);
         sendErrorResponse(res, 500, error.message || 'Failed to execute command in session', sessionId);
       }
     }
   } catch (error) {
-    console.error('Error executing command in session:', error);
+    logger.error('Error executing command in session:', error);
     sendErrorResponse(res, 500, error.message || 'Failed to execute command in session', sessionId);
   }
 });
@@ -479,7 +480,7 @@ apiServer.get('/sessions', (req, res) => {
 
     sendApiResponse(res, 200, { sessions });
   } catch (error) {
-    console.error('Error listing sessions:', error);
+    logger.error('Error listing sessions:', error);
     sendErrorResponse(res, 500, 'Failed to list sessions');
   }
 });
@@ -505,7 +506,7 @@ apiServer.get('/output/:sessionId', (req, res) => {
       lastUnblockedOutputTimestamp: session.lastUnblockedOutputTimestamp // And its timestamp
     });
   } catch (error) {
-    console.error('Error getting output:', error);
+    logger.error('Error getting output:', error);
     sendErrorResponse(res, 500, 'Failed to get command output', sessionId);
   }
 });
@@ -529,26 +530,26 @@ apiServer.post('/stop/:sessionId', (req, res) => {
       res.status(400).json({ error: 'Process already terminated' });
     }
   } catch (error) {
-    console.error('Error stopping command:', error);
+    logger.error('Error stopping command:', error);
     res.status(500).json({ error: 'Failed to stop command' });
   }
 });
 
 // Handle IPC messages from renderer
-ipcMain.on('terminal-input', (event, { sessionId, input }) => {
+ipcMain.on('pty-input', (event, { sessionId, input }) => {
   try {
     if (terminals.has(sessionId)) {
       terminals.get(sessionId).process.write(input);
     }
   } catch (error) {
-    console.error('Error handling terminal input:', error);
+    logger.error('Error handling terminal input:', error);
   }
 });
 
 // Handle unblocked terminal output
 ipcMain.on('terminal-send-current-output', (event, { sessionId, output }) => {
  if (DEBUG) {
-   console.log(`Received unblocked output for session ${sessionId}. Output length: ${output.length}`);
+   logger.info(`Received unblocked output for session ${sessionId}. Output length: ${output.length}`);
  }
  try {
    const session = terminals.get(sessionId);
@@ -558,7 +559,7 @@ ipcMain.on('terminal-send-current-output', (event, { sessionId, output }) => {
      // For now, we just log. The actual "sending back" to the initiating MCP request
      // would require modifying how the /execute or /output endpoints work,
      // or a new mechanism for Claude Desktop to fetch this.
-     console.log(`[Session ${sessionId}] Unblocked output received. Length: ${output.length}`);
+     logger.info(`[Session ${sessionId}] Unblocked output received. Length: ${output.length}`);
  
      // Check if there's a pending completion promise for this session
      if (pendingCompletionSignals.has(sessionId)) {
@@ -575,13 +576,13 @@ ipcMain.on('terminal-send-current-output', (event, { sessionId, output }) => {
          lastUnblockedOutputTimestamp: session.lastUnblockedOutputTimestamp
        });
        pendingCompletionSignals.delete(sessionId); // Clean up
-       console.log(`[Session ${sessionId}] Early resolve triggered by unblock.`);
+       logger.info(`[Session ${sessionId}] Early resolve triggered by unblock.`);
      }
    } else {
-     console.warn(`Session ${sessionId} not found for unblocked output.`);
+     logger.warn(`Session ${sessionId} not found for unblocked output.`);
    }
  } catch (error) {
-   console.error(`Error handling unblocked output for session ${sessionId}:`, error);
+   logger.error(`Error handling unblocked output for session ${sessionId}:`, error);
  }
 });
 ipcMain.on('terminal-resize', (event, { sessionId, cols, rows }) => {
@@ -593,7 +594,7 @@ ipcMain.on('terminal-resize', (event, { sessionId, cols, rows }) => {
       }
     }
   } catch (error) {
-    console.error('Error handling terminal resize:', error);
+    logger.error('Error handling terminal resize:', error);
   }
 });
 // Add handler for closing specific windows
@@ -604,7 +605,7 @@ ipcMain.on('close-window', (event, sessionId) => {
       session.window.destroy();
     }
   } catch (error) {
-    console.error('Error closing window:', error);
+    logger.error('Error closing window:', error);
   }
 });
 
@@ -632,7 +633,7 @@ setInterval(() => { }, 1000);
 
 // Add app quit handler to clean up all terminal sessions
 app.on('before-quit', () => {
-  console.log('Application shutting down, cleaning up resources...');
+  logger.info('Application shutting down, cleaning up resources...');
 
   // Clean up all terminal sessions
   for (const [sessionId, session] of terminals.entries()) {
@@ -640,7 +641,7 @@ app.on('before-quit', () => {
       try {
         session.process.kill();
       } catch (e) {
-        console.error(`Error killing process for session ${sessionId}:`, e);
+        logger.error(`Error killing process for session ${sessionId}:`, e);
       }
     }
     terminals.delete(sessionId);
