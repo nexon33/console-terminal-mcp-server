@@ -10,7 +10,8 @@ import os from 'os';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { fileURLToPath } from 'url';
-import lockfile from 'proper-lockfile';
+import * as lockfile from 'lockfile'; // Changed import
+import { promisify } from 'util'; // Ensure promisify is imported
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -62,26 +63,34 @@ async function isServerRunning() {
   }
 }
 
+// Promisify lockfile methods
+const lock = promisify(lockfile.lock);
+const unlock = promisify(lockfile.unlock);
+
 // Function to acquire mutex
 async function acquireMutex() {
   try {
-    await lockfile.lock(MUTEX_FILE, {
-      retries: {
-        // Retry acquiring the lock for up to 10 seconds
-        retries: 10,
-        factor: 2,
-        minTimeout: 100,
-        maxTimeout: 1000,
-        randomize: true
-      },
-      stale: 5000, // Consider lock stale after 5 seconds
-      update: 2000, // Update lock file timestamp every 2 seconds
-      realpath: false // Do not resolve the real path of the lock file
-    });
-    console.error('Mutex acquired successfully.');
+    console.log(`Attempting to acquire mutex for file: ${MUTEX_FILE}`);
+    // Options for lockfile:
+    // wait: time to wait for lock (ms) - e.g., 10 seconds total
+    // stale: time lock is considered stale (ms) - e.g., 5 seconds
+    // retries: number of retries
+    // retryWait: time between retries (ms)
+    const lockOptions = {
+      wait: 10 * 1000,   // Max wait time 10s
+      pollPeriod: 100, // Check every 100ms
+      stale: 5 * 1000,   // Stale after 5s
+      retries: 100,      // Number of retries (100 * 100ms = 10s)
+      retryWait: 100   // Wait 100ms between retries (used if retries is an object, but pollPeriod covers this for simple retries)
+    };
+    await lock(MUTEX_FILE, lockOptions);
+    console.log('Mutex acquired successfully.');
     return true;
   } catch (error) {
     console.error('Failed to acquire mutex:', error.message);
+    if (error.code === 'EEXIST') {
+      console.error('Lock file already exists.');
+    }
     return false;
   }
 }
@@ -89,12 +98,21 @@ async function acquireMutex() {
 // Function to release mutex
 async function releaseMutex() {
   try {
+    // lockfile.unlock will throw if the file doesn't exist or isn't a lock file.
+    // It's generally better to just attempt unlock and catch errors.
+    // However, to maintain similar logging:
     if (fs.existsSync(MUTEX_FILE)) {
-      await lockfile.unlock(MUTEX_FILE);
-      console.error('Mutex released successfully.');
+      console.log(`Attempting to release mutex for file: ${MUTEX_FILE}`);
+      await unlock(MUTEX_FILE);
+      console.log('Mutex released successfully.');
+    } else {
+      // This case might not be strictly necessary if acquireMutex always creates one.
+      // And if it doesn't exist, unlock would fail anyway.
+      console.log(`Mutex file ${MUTEX_FILE} not found, no release needed or already released.`);
     }
   } catch (error) {
     console.error('Error releasing mutex:', error.message);
+    // Common errors: ENOENT (file not found), EPERM (not owner)
   }
 }
 
