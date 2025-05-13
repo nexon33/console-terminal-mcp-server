@@ -8,6 +8,16 @@ import { spawn as ptySpawn } from 'node-pty'; // Import only the spawn function
 import { fileURLToPath } from 'url';
 // Removed MCP server import: import mcpServerSingleton from './mcp-server.js';
 
+// Helper function to send consistent API responses
+function sendApiResponse(res, statusCode, data) {
+  res.status(statusCode).json(data);
+}
+
+// Helper function to send error responses
+function sendErrorResponse(res, statusCode, message, sessionId = null) {
+  sendApiResponse(res, statusCode, { error: message, sessionId });
+}
+
 // Get the directory name in ES module scope
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -251,10 +261,16 @@ function createTerminalWindow(command, sessionId) {
     }
   });
 
+  // NOTE: Consider adding logic here or elsewhere to clean up inactive or errored sessions
+  // from the 'terminals' map to prevent potential resource leaks over time.
+
   return win;
 }
 
 // Helper function to wait for command completion
+// NOTE: This logic involving pendingCompletionSignals and intervals is a bit complex.
+// Consider refactoring for clarity or using a more explicit state management approach
+// if further complexity is added.
 async function waitForCommandCompletion(sessionId) {
   return new Promise((resolve, reject) => {
     pendingCompletionSignals.set(sessionId, { resolve, reject }); // Store signals
@@ -331,13 +347,16 @@ apiServer.post('/execute', async (req, res) => {
   try {
     const { command } = req.body;
 
-    if (!command) {
-      return res.status(400).json({ error: 'Command is required' });
+    if (!command || command.trim().length === 0) {
+      return sendErrorResponse(res, 400, 'Command is required and cannot be empty');
     }
 
     // Basic command validation
+    // NOTE: This is not a comprehensive security measure against command injection.
+    // More robust validation or sanitization might be needed depending on the use case
+    // and the environment where this server is deployed.
     if (command.includes('&&') || command.includes('||') || command.includes(';')) {
-      return res.status(400).json({ error: 'Command chaining is not allowed' });
+      return sendErrorResponse(res, 400, 'Command chaining is not allowed');
     }
 
     // Generate unique session ID
@@ -349,12 +368,12 @@ apiServer.post('/execute', async (req, res) => {
     // Wait for command completion and get output
     try {
       const result = await waitForCommandCompletion(sessionId);
-      res.json(result);
+      sendApiResponse(res, 200, result);
     } catch (error) {
       // If we get a timeout or other error, still return the session info
       const session = terminals.get(sessionId);
       if (session) {
-        res.json({
+        sendApiResponse(res, 500, {
           sessionId,
           command: session.command,
           output: session.buffer,
@@ -364,12 +383,15 @@ apiServer.post('/execute', async (req, res) => {
           error: error.message
         });
       } else {
-        throw error;
+        console.error('Error executing command:', error);
+        sendErrorResponse(res, 500, error.message || 'Failed to execute command');
       }
     }
   } catch (error) {
     console.error('Error executing command:', error);
-    res.status(500).json({ error: error.message || 'Failed to execute command' });
+    // NOTE: Consider using a dedicated logging library (e.g., Winston, Pino) for more structured logging
+    // and easier debugging in production environments. This would replace console.error calls.
+    sendErrorResponse(res, 500, error.message || 'Failed to execute command');
   }
 });
 
@@ -379,20 +401,20 @@ apiServer.post('/execute/:sessionId', async (req, res) => {
     const { sessionId } = req.params;
     const { command } = req.body;
     
-    if (!command) {
-      return res.status(400).json({ error: 'Command is required' });
+    if (!command || command.trim().length === 0) {
+      return sendErrorResponse(res, 400, 'Command is required and cannot be empty', sessionId);
     }
-    
+
     if (!terminals.has(sessionId)) {
-      return res.status(404).json({ error: 'Session not found' });
+      return sendErrorResponse(res, 404, 'Session not found', sessionId);
     }
-    
+
     const session = terminals.get(sessionId);
-    
+
     // CHANGE THIS CHECK - a session might have a previous command completed
     // but still be available for more commands as long as the process exists
     if (session.process === null) {
-      return res.status(400).json({ error: 'Session is not active' });
+      return sendErrorResponse(res, 400, 'Session is not active', sessionId);
     }
     
     // Clear the buffer for the new command
@@ -418,12 +440,12 @@ apiServer.post('/execute/:sessionId', async (req, res) => {
     // Wait for command completion and get output
     try {
       const result = await waitForCommandCompletion(sessionId);
-      res.json(result);
+      sendApiResponse(res, 200, result);
     } catch (error) {
       // If we get a timeout or other error, still return the session info
       const currentSession = terminals.get(sessionId);
       if (currentSession) {
-        res.json({
+        sendApiResponse(res, 500, {
           sessionId,
           command: currentSession.command,
           output: currentSession.buffer,
@@ -433,12 +455,13 @@ apiServer.post('/execute/:sessionId', async (req, res) => {
           error: error.message
         });
       } else {
-        throw error;
+        console.error('Error executing command in session:', error);
+        sendErrorResponse(res, 500, error.message || 'Failed to execute command in session', sessionId);
       }
     }
   } catch (error) {
     console.error('Error executing command in session:', error);
-    res.status(500).json({ error: error.message || 'Failed to execute command in session' });
+    sendErrorResponse(res, 500, error.message || 'Failed to execute command in session', sessionId);
   }
 });
 
@@ -454,10 +477,10 @@ apiServer.get('/sessions', (req, res) => {
       lastUnblockedOutputTimestamp: session.lastUnblockedOutputTimestamp // Add timestamp here for quick check
     }));
 
-    res.json({ sessions });
+    sendApiResponse(res, 200, { sessions });
   } catch (error) {
     console.error('Error listing sessions:', error);
-    res.status(500).json({ error: 'Failed to list sessions' });
+    sendErrorResponse(res, 500, 'Failed to list sessions');
   }
 });
 
@@ -467,11 +490,11 @@ apiServer.get('/output/:sessionId', (req, res) => {
     const { sessionId } = req.params;
 
     if (!terminals.has(sessionId)) {
-      return res.status(404).json({ error: 'Session not found' });
+      return sendErrorResponse(res, 404, 'Session not found', sessionId);
     }
 
     const session = terminals.get(sessionId);
-    res.json({
+    sendApiResponse(res, 200, {
       sessionId,
       command: session.command,
       output: session.buffer, // This is the full buffer
@@ -483,7 +506,7 @@ apiServer.get('/output/:sessionId', (req, res) => {
     });
   } catch (error) {
     console.error('Error getting output:', error);
-    res.status(500).json({ error: 'Failed to get command output' });
+    sendErrorResponse(res, 500, 'Failed to get command output', sessionId);
   }
 });
 
@@ -493,7 +516,7 @@ apiServer.post('/stop/:sessionId', (req, res) => {
     const { sessionId } = req.params;
 
     if (!terminals.has(sessionId)) {
-      return res.status(404).json({ error: 'Session not found' });
+      return sendErrorResponse(res, 404, 'Session not found', sessionId);
     }
 
     const session = terminals.get(sessionId);

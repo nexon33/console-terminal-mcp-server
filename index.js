@@ -5,6 +5,7 @@ import axios from "axios";
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import stripAnsi from 'strip-ansi';
 import os from 'os';
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -12,6 +13,33 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Helper function to format errors
+function formatErrorResponse(error, sessionId = null) {
+  let errorMessage = 'An unknown error occurred.';
+  let errorSessionId = sessionId;
+
+  if (axios.isAxiosError(error)) {
+    if (error.response) {
+      errorMessage = `API Error: ${error.response.status} - ${error.response.data?.error || error.response.statusText}`;
+      errorSessionId = error.response.data?.sessionId || errorSessionId;
+    } else if (error.request) {
+      errorMessage = `API Request Error: No response received. ${error.message}`;
+    } else {
+      errorMessage = `API Setup Error: ${error.message}`;
+    }
+  } else {
+    errorMessage = `Internal Server Error: ${error.message}`;
+  }
+
+  return {
+    content: [{
+      type: "text", text: `Session ID: ${errorSessionId}\n\n ${errorMessage}`,
+      exitCode: 1
+    }]
+  };
+}
+
 
 // Create MCP server
 let apiBaseUrl = 'http://localhost';
@@ -201,8 +229,8 @@ server.tool(
       // Create a new session
       const response = await axios.post(`${apiBaseUrl}/execute`, { command });
       const result = response.data;
-      // Clean up terminal output by removing ANSI escape sequences
-      const cleanOutput = result.output.replace(/\x1B\[[0-9;]*[JKmsu]/g, '');
+      // Clean up terminal output using strip-ansi
+      const cleanOutput = stripAnsi(result.output);
       return {
         content: [{
           type: "text",
@@ -212,13 +240,7 @@ server.tool(
         //sessionId: result.sessionId
       };
     } catch (error) {
-      const errorSessionId = error.response?.data?.sessionId || null;
-      return {
-        content: [{
-          type: "text", text: `Session ID: ${errorSessionId}\n\n ${error.response?.data?.error || error.message}`,
-          exitCode: 1
-        }]
-      };
+      return formatErrorResponse(error);
     }
   }
 );
@@ -246,8 +268,8 @@ server.tool(
       //}
 
       const result = response.data;
-      // Clean up terminal output by removing ANSI escape sequences
-      const cleanOutput = result.output.replace(/\x1B\[[0-9;]*[JKmsu]/g, '');
+      // Clean up terminal output using strip-ansi
+      const cleanOutput = stripAnsi(result.output);
       return {
         content: [{
           type: "text",
@@ -257,13 +279,7 @@ server.tool(
 
       };
     } catch (error) {
-      const errorSessionId = error.response?.data?.sessionId || sessionId || null;
-      return {
-        content: [{
-          type: "text", text: `Session ID: ${result.sessionId}\n\n ${error.response?.data?.error || error.message}`,
-          exitCode: 1
-        }]
-      };
+      return formatErrorResponse(error, sessionId);
     }
   }
 );
@@ -283,8 +299,8 @@ server.tool(
 
       const response = await axios.get(`${apiBaseUrl}/output/${sessionId}`);
       const result = response.data;
-      // Clean up terminal output by removing ANSI escape sequences
-      const cleanOutput = result.output.replace(/\x1B\[[0-9;]*[JKmsu]/g, '');
+      // Clean up terminal output using strip-ansi
+      const cleanOutput = stripAnsi(result.output);
       return {
         content: [{
           type: "text", text: `Session ID: ${result.sessionId}\n\n ${cleanOutput}`,
@@ -292,13 +308,7 @@ server.tool(
         }]
       };
     } catch (error) {
-      const errorSessionId = error.response?.data?.sessionId || sessionId;
-      return {
-        content: [{
-          type: "text", text: `Session ID: ${result.sessionId}\n\n ${error.response?.data?.error || error.message}`,
-          exitCode: 1
-        }]
-      };
+      return formatErrorResponse(error, sessionId);
     }
   }
 );
@@ -325,13 +335,7 @@ server.tool(
         }]
       };
     } catch (error) {
-      const errorSessionId = error.response?.data?.sessionId || sessionId;
-      return {
-        content: [{
-          type: "text", text: `Session ID: ${result.sessionId}\n\n ${error.response?.data?.error || error.message}`,
-          exitCode: 1
-        }]
-      };
+      return formatErrorResponse(error, sessionId);
     }
   }
 );
@@ -357,12 +361,7 @@ server.tool(
         }]
       };
     } catch (error) {
-      return {
-        content: [{
-          type: "text", text: `Error fetching sessions: ${error.message}`,
-          exitCode: 1
-        }]
-      };
+      return formatErrorResponse(error);
     }
   }
 );
