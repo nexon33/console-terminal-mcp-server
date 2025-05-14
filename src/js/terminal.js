@@ -2228,160 +2228,137 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Create search button if it doesn't exist
     createSearchButton();
     
-    // Add CSS for title bar and improved layout
+    // Add CSS for blue borders and terminal styling
     const style = document.createElement('style');
     style.textContent += `
-      /* Title bar styling */
-      .titlebar, .window-titlebar {
-        display: flex;
-        align-items: center;
-        height: 32px;
-        background: var(--glassmorphism-bg);
-        backdrop-filter: blur(12px);
-        border-bottom: 1px solid var(--glassmorphism-border);
-        user-select: none;
-        position: relative;
-      }
-      
-      .titlebar-drag-region {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        -webkit-app-region: drag;
-      }
-      
-      .titlebar-app-icon {
-        width: 16px;
-        height: 16px;
-        margin: 0 10px;
-        z-index: 10;
-        position: relative;
-      }
-      
-      .titlebar-app-icon svg {
-        width: 100%;
-        height: 100%;
-        fill: none;
-        stroke: currentColor;
-        stroke-width: 1.5;
-        stroke-linecap: round;
-        stroke-linejoin: round;
-      }
-      
-      .titlebar-title {
-        font-size: 13px;
-        font-weight: 500;
-        flex: 1;
-        z-index: 10;
-        position: relative;
-      }
-      
-      .titlebar-controls {
-        display: flex;
-        z-index: 10;
-        position: relative;
-        -webkit-app-region: no-drag;
-      }
-      
-      .titlebar-button {
-        width: 46px;
-        height: 32px;
-        background: transparent;
-        border: none;
-        outline: none;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        transition: background-color 0.2s;
-      }
-      
-      .titlebar-button:hover {
-        background-color: var(--background-lighter);
-      }
-      
-      .titlebar-close:hover {
-        background-color: #e81123;
-        color: white;
-      }
-      
-      .titlebar-button svg {
-        width: 10px;
-        height: 10px;
-        fill: currentColor;
-        stroke: currentColor;
-        stroke-width: 1;
-      }
-      
-      /* Improved new tab button */
-      .new-tab-button {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-        background: var(--glassmorphism-bg);
-        border: 1px dashed var(--glassmorphism-border);
-        margin-top: 4px;
-        cursor: pointer;
-        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        opacity: 0.7;
-      }
-      
-      .new-tab-button:hover {
-        transform: rotate(90deg) scale(1.1);
+      /* Terminal blue border styling */
+      .terminal-instance {
+        border-radius: var(--terminal-radius);
+        overflow: hidden;
+        transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
         opacity: 1;
-        background: var(--accent-color);
-        border: 1px solid var(--accent-color);
-        color: white;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        position: relative;
+        border: 1px solid #0078d7;
+        box-shadow: 0 0 0 1px rgba(0, 120, 215, 0.2);
       }
       
-      .new-tab-button svg {
-        width: 14px;
-        height: 14px;
-        fill: none;
-        stroke: currentColor;
-        stroke-width: 2;
-        stroke-linecap: round;
-        stroke-linejoin: round;
+      .terminal-container {
+        border: 2px solid #0078d7;
+        border-radius: var(--terminal-radius);
+        overflow: hidden;
+        box-shadow: 0 0 10px rgba(0, 120, 215, 0.3);
       }
       
-      /* Improved terminal colors and effects */
+      #terminals-container {
+        border: 1px solid #0078d7;
+        border-radius: var(--terminal-radius);
+        overflow: hidden;
+        margin: 4px;
+        box-shadow: inset 0 0 5px rgba(0, 120, 215, 0.3);
+      }
+      
+      .tab.active {
+        border-top: 2px solid #0078d7;
+        border-left: 1px solid #0078d7;
+        border-right: 1px solid #0078d7;
+      }
+      
+      /* Status bar with blue border */
+      .status-bar {
+        border-top: 1px solid #0078d7;
+      }
+      
+      /* Terminal glow effect */
+      .terminal-instance.active {
+        box-shadow: 0 0 0 1px #0078d7, 0 0 8px rgba(0, 120, 215, 0.6);
+      }
+      
       .terminal-instance .xterm {
         padding: 8px;
       }
       
+      /* Blue glow animation for active terminal */
       .terminal-instance.active .xterm {
-        animation: terminal-glow 2s ease-in-out infinite alternate;
+        animation: blue-terminal-glow 3s ease-in-out infinite alternate;
       }
       
-      @keyframes terminal-glow {
+      @keyframes blue-terminal-glow {
         0% {
-          box-shadow: 0 0 5px rgba(97, 175, 239, 0.1);
+          box-shadow: 0 0 5px rgba(0, 120, 215, 0.3);
         }
         100% {
-          box-shadow: 0 0 15px rgba(97, 175, 239, 0.3);
+          box-shadow: 0 0 15px rgba(0, 120, 215, 0.5);
         }
       }
       
-      /* Main app container */
-      .app-container {
-        display: flex;
-        flex-direction: column;
-        height: 100vh;
-        background: var(--background);
-        overflow: hidden;
+      /* Blue tinted selection */
+      .xterm-selection {
+        background-color: rgba(0, 120, 215, 0.3) !important;
       }
       
-      /* Allow terminal container to fill remaining space */
-      .terminals-container {
-        flex: 1;
-        position: relative;
-        overflow: hidden;
+      /* Blue focus outline for tabs */
+      .tab:focus {
+        outline: 2px solid #0078d7;
+        outline-offset: -1px;
+      }
+      
+      /* Accent color definition */
+      :root {
+        --accent-color: #0078d7;
+        --primary-glow: rgba(0, 120, 215, 0.15);
+      }
+      
+      /* Title bar with blue styling */
+      .titlebar, .window-titlebar {
+        border-bottom: 1px solid #0078d7;
+        box-shadow: 0 2px 4px rgba(0, 120, 215, 0.1);
+      }
+      
+      /* Blue tabs styling */
+      .tab {
+        border-bottom: none;
+      }
+      
+      .tab::before {
+        background: #0078d7;
+      }
+      
+      .tabs-container {
+        border-bottom: 1px solid #0078d7;
+      }
+      
+      /* Blue styling for menu and buttons */
+      .dropdown-menu {
+        border: 1px solid #0078d7;
+        box-shadow: 0 4px 12px rgba(0, 120, 215, 0.2);
+      }
+      
+      .dropdown-menu-item:hover {
+        background-color: rgba(0, 120, 215, 0.1);
+      }
+      
+      button:hover, .btn:hover {
+        background-color: rgba(0, 120, 215, 0.1);
+      }
+      
+      /* Search panel with blue accents */
+      #search-panel {
+        border: 1px solid #0078d7;
+      }
+      
+      #search-input:focus {
+        border-color: #0078d7;
+        box-shadow: 0 0 0 2px rgba(0, 120, 215, 0.2);
+      }
+      
+      /* Session ID with blue accent */
+      .session-id::before {
+        background-color: #0078d7;
+      }
+      
+      /* Window border */
+      body {
+        border: 1px solid #0078d7;
       }
     `;
     document.head.appendChild(style);
