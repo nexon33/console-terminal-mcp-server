@@ -614,97 +614,108 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Toggle menu visibility
   function toggleMenu(menuName) {
+    // Get the menu element
     const menu = document.getElementById(`${menuName}-menu`);
     if (!menu) return;
     
-    // Reset any active menu items
-    document.querySelectorAll('.menu-item').forEach(item => {
-      item.classList.remove('active');
-    });
+    // Check if this menu is already open
+    const isThisMenuVisible = menuName === selectedMenu;
     
-    // If this menu is already open, close it
-    if (menuVisible && selectedMenu === menuName) {
-      menu.classList.remove('show');
-      menuVisible = false;
-      selectedMenu = null;
-      return;
-    }
-    
-    // Close any open menu
+    // Hide any open menus
     hideAllMenus();
     
-    // Position the menu
+    // If this menu was visible, we're done (it was toggled off)
+    if (isThisMenuVisible) return;
+    
+    // Otherwise, show this menu
+    menu.style.display = 'block';
+    menuVisible = true;
+    selectedMenu = menuName;
+    
+    // Highlight the menu item
     const menuItem = document.querySelector(`.menu-item[data-menu="${menuName}"]`);
     if (menuItem) {
-      const rect = menuItem.getBoundingClientRect();
-      menu.style.left = `${rect.left}px`;
-      menu.style.top = `${rect.bottom}px`;
-      
-      // Mark this menu item as active
       menuItem.classList.add('active');
     }
     
-    // Show the menu
-    menu.classList.add('show');
-    menuVisible = true;
-    selectedMenu = menuName;
+    // Position the menu
+    const rect = menuItem.getBoundingClientRect();
+    menu.style.left = `${rect.left}px`;
+    menu.style.top = `${rect.bottom}px`;
   }
   
   // Show submenu
   function showSubmenu(submenuName, trigger) {
+    // Hide any existing submenus
+    hideAllSubmenus();
+    
+    // Show the submenu
     const submenu = document.getElementById(`${submenuName}-menu`);
     if (!submenu) return;
     
-    // Hide any open submenu
-    hideAllSubmenus();
-    
-    // Position the submenu
-    const rect = trigger.getBoundingClientRect();
-    submenu.style.left = `${rect.right}px`;
-    submenu.style.top = `${rect.top}px`;
-    
-    // Show the submenu
-    submenu.classList.add('show');
+    submenu.style.display = 'block';
     submenuVisible = true;
     selectedSubmenu = submenuName;
     
-    // Handle submenu hover out
+    // Position the submenu
+    const triggerRect = trigger.getBoundingClientRect();
+    const parentMenuRect = trigger.closest('.dropdown-menu').getBoundingClientRect();
+    
+    submenu.style.top = `${triggerRect.top}px`;
+    submenu.style.left = `${parentMenuRect.right}px`;
+    
+    // Add mouse leave event to hide submenu
     submenu.addEventListener('mouseleave', () => {
-      setTimeout(() => {
-        if (!submenu.matches(':hover') && !trigger.matches(':hover')) {
-          submenu.classList.remove('show');
-          submenuVisible = false;
-          selectedSubmenu = null;
-        }
-      }, 100);
+      // Only hide if not hovering over the trigger
+      if (!trigger.matches(':hover')) {
+        submenu.style.display = 'none';
+        submenuVisible = false;
+        selectedSubmenu = null;
+      }
+    });
+    
+    // Make sure submenu stays visible when hovering over trigger
+    trigger.addEventListener('mouseleave', (e) => {
+      // Check if we're moving to the submenu
+      const relatedTarget = e.relatedTarget;
+      if (!relatedTarget || !submenu.contains(relatedTarget)) {
+        setTimeout(() => {
+          if (!submenu.matches(':hover')) {
+            submenu.style.display = 'none';
+            submenuVisible = false;
+            selectedSubmenu = null;
+          }
+        }, 100);
+      }
     });
   }
   
   // Hide all dropdown menus
   function hideAllMenus() {
-    // Reset active menu items
-    document.querySelectorAll('.menu-item').forEach(item => {
-      item.classList.remove('active');
+    // Hide submenus first
+    hideAllSubmenus();
+    
+    // Hide regular menus
+    const menus = document.querySelectorAll('.dropdown-menu');
+    menus.forEach(menu => {
+      menu.style.display = 'none';
     });
     
-    // Hide menus
-    const menus = document.querySelectorAll('.dropdown-menu:not(.submenu)');
-    menus.forEach(menu => {
-      menu.classList.remove('show');
+    // Deselect active menu
+    const activeMenuItems = document.querySelectorAll('.menu-item.active');
+    activeMenuItems.forEach(item => {
+      item.classList.remove('active');
     });
     
     menuVisible = false;
     selectedMenu = null;
-    
-    // Also hide submenus
-    hideAllSubmenus();
   }
   
   // Hide all submenus
   function hideAllSubmenus() {
-    const submenus = document.querySelectorAll('.dropdown-menu.submenu');
+    const submenus = document.querySelectorAll('.submenu');
     submenus.forEach(submenu => {
-      submenu.classList.remove('show');
+      submenu.style.display = 'none';
     });
     
     submenuVisible = false;

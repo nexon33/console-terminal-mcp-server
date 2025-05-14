@@ -103,7 +103,7 @@ app.whenReady().then(() => {
   tray.setToolTip('MCP Terminal');
   tray.setContextMenu(contextMenu);
   
-  // Remove default menu
+  // Remove default menu - IMPORTANT: this must be done before creating the window
   Menu.setApplicationMenu(null);
   
   // Create the main window
@@ -132,8 +132,36 @@ function createOrShowMainWindow() {
     },
     backgroundColor: '#1e1e1e',
     show: false,
-    autoHideMenuBar: true // Hide the default menu bar
+    autoHideMenuBar: true, // Hide the default menu bar
+    frame: true // Keep frame for draggable window
   });
+  
+  // Windows-specific handling for menu bar
+  if (process.platform === 'win32') {
+    // Explicitly set menu visibility to false (Windows-specific fix)
+    mainWindow.setMenuBarVisibility(false);
+    
+    // Add event listener to prevent menu bar from showing when Alt key is pressed
+    mainWindow.on('focus', () => {
+      mainWindow.setMenuBarVisibility(false);
+    });
+    
+    // Intercept keyboard shortcuts that might show the menu bar
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+      // Prevent Alt key from showing the menu bar
+      if (input.key === 'Alt' || 
+          (input.alt && !input.control && !input.meta && !input.shift)) {
+        // Prevent default behavior that shows menu bar
+        event.preventDefault();
+        
+        // If this is an Alt keydown event, send it to the renderer for custom menu handling
+        if (input.type === 'keyDown' && input.key === 'Alt') {
+          // Send to renderer process for custom menu handling
+          mainWindow.webContents.send('alt-key-pressed');
+        }
+      }
+    });
+  }
   
   // Load the terminal UI
   mainWindow.loadFile('terminal.html');
@@ -141,6 +169,10 @@ function createOrShowMainWindow() {
   // Show window when ready to avoid flashing
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    // Additional check to ensure menu is hidden on Windows
+    if (process.platform === 'win32') {
+      mainWindow.setMenuBarVisibility(false);
+    }
   });
   
   // Handle window close

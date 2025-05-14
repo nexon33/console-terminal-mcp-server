@@ -6,6 +6,23 @@
   <title>MCP Terminal</title>
   <link rel="stylesheet" href="node_modules/xterm/css/xterm.css" />
   <link rel="stylesheet" href="src/css/terminal.css" />
+  <style>
+    /* Additional styles to ensure proper menu bar behavior */
+    body {
+      overflow: hidden;
+      margin: 0;
+      padding: 0;
+    }
+    
+    /* Ensure app-menu-bar is properly styled and positioned */
+    .app-menu-bar {
+      -webkit-app-region: drag;
+      position: relative;
+      z-index: 100;
+      margin: 0;
+      padding: 0;
+    }
+  </style>
 </head>
 <body>
   <div class="app-container">

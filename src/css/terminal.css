@@ -224,9 +224,15 @@ body {
 
 /* Submenu positioning */
 .submenu {
-  left: 100% !important;
-  top: 0 !important;
+  position: absolute;
+  background-color: var(--dropdown-bg);
+  border: 1px solid var(--border-color);
   border-radius: 0 4px 4px 0;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  min-width: 200px;
+  z-index: 101; /* Higher than parent menus */
+  display: none;
+  padding: 4px 0;
 }
 
 /* Tabs Bar */

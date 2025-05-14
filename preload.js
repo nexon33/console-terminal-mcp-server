@@ -77,5 +77,10 @@ contextBridge.exposeInMainWorld('api', {
   },
   onTerminalCloseResponse: (callback) => {
     ipcRenderer.on('terminal:close-response', (event, data) => callback(data));
+  },
+  
+  // Custom menu handling
+  onAltKeyPressed: (callback) => {
+    ipcRenderer.on('alt-key-pressed', () => callback());
   }
 });
