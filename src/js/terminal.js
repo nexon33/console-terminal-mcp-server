@@ -3,6 +3,7 @@
  */
 import themes from './themes.js';
 import { initializeAllEventListeners } from './event-handler.js'; // Added import
+import { displayFeedbackMessage } from './dom-utils.js'; // Added import
 
 document.addEventListener('DOMContentLoaded', async () => {
   // Global variables
@@ -83,8 +84,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }, 300);
     }, 50);
     
-    // Show feedback
-    showFeedback(`Theme changed to ${currentTheme}`, 'info');
+    displayFeedbackMessage(`Theme changed to ${currentTheme}`, 'info');
   }
   
   // Change font size
@@ -100,11 +100,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       terminal.fitAddon.fit();
     });
     
-    // Show feedback
     if (delta > 0) {
-      showFeedback(`Font size increased to ${currentFontSize}px`, 'info');
+      displayFeedbackMessage(`Font size increased to ${currentFontSize}px`, 'info');
     } else {
-      showFeedback(`Font size decreased to ${currentFontSize}px`, 'info');
+      displayFeedbackMessage(`Font size decreased to ${currentFontSize}px`, 'info');
     }
   }
   
@@ -114,72 +113,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (appMenuBar) {
       appMenuBar.style.display = appMenuBar.style.display === 'none' ? 'flex' : 'none';
     }
-  }
-  
-  // Show feedback message with improved styling
-  function showFeedback(message, type = 'success') {
-    const feedbackElement = document.createElement('div');
-    feedbackElement.textContent = message;
-    feedbackElement.style.position = 'absolute';
-    feedbackElement.style.left = '50%';
-    feedbackElement.style.top = '50%';
-    feedbackElement.style.transform = 'translate(-50%, -50%)';
-    feedbackElement.style.padding = '12px 24px';
-    feedbackElement.style.borderRadius = '6px';
-    feedbackElement.style.zIndex = '1000';
-    feedbackElement.style.display = 'flex';
-    feedbackElement.style.alignItems = 'center';
-    feedbackElement.style.boxShadow = '0 10px 30px rgba(0, 0, 0, 0.3)';
-    feedbackElement.style.animation = 'feedbackAnim 0.3s forwards, feedbackFade 2s forwards 0.5s';
-    feedbackElement.style.backdropFilter = 'blur(8px)';
-    
-    // Add icon based on type
-    const icon = document.createElement('span');
-    icon.style.marginRight = '10px';
-    icon.style.fontSize = '18px';
-    
-    if (type === 'success') {
-      feedbackElement.style.backgroundColor = 'rgba(46, 204, 113, 0.85)';
-      feedbackElement.style.color = 'white';
-      icon.textContent = '✓';
-    } else if (type === 'error') {
-      feedbackElement.style.backgroundColor = 'rgba(231, 76, 60, 0.85)';
-      feedbackElement.style.color = 'white';
-      icon.textContent = '✕';
-    } else if (type === 'info') {
-      feedbackElement.style.backgroundColor = 'rgba(52, 152, 219, 0.85)';
-      feedbackElement.style.color = 'white';
-      icon.textContent = 'ℹ';
-    }
-    
-    // Add animation keyframes
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes feedbackAnim {
-        0% { opacity: 0; transform: translate(-50%, -40%); }
-        100% { opacity: 1; transform: translate(-50%, -50%); }
-      }
-      
-      @keyframes feedbackFade {
-        0% { opacity: 1; transform: translate(-50%, -50%); }
-        80% { opacity: 1; transform: translate(-50%, -50%); }
-        100% { opacity: 0; transform: translate(-50%, -40%); }
-      }
-    `;
-    document.head.appendChild(style);
-    
-    feedbackElement.prepend(icon);
-    document.body.appendChild(feedbackElement);
-    
-    // Remove after animation completes
-    setTimeout(() => {
-      if (feedbackElement.parentNode) {
-        feedbackElement.parentNode.removeChild(feedbackElement);
-      }
-      if (style.parentNode) {
-        style.parentNode.removeChild(style);
-      }
-    }, 2500);
   }
   
   // Create a new terminal tab
@@ -207,7 +140,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error('Error creating terminal:', sessionIdOrError.message);
         
         // Show error message to user
-        showFeedback(`Terminal error: ${sessionIdOrError.message || 'Failed to create terminal process'}`, 'error');
+        displayFeedbackMessage(`Terminal error: ${sessionIdOrError.message || 'Failed to create terminal process'}`, 'error');
         
         // Try to reuse existing terminal if available
         if (activeTerminalId && terminals[activeTerminalId]) {
@@ -239,7 +172,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (loadingTab.parentNode) {
         loadingTab.parentNode.removeChild(loadingTab);
       }
-      showFeedback('Failed to create terminal', 'error');
+      displayFeedbackMessage('Failed to create terminal', 'error');
     });
   }
   
@@ -556,7 +489,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }, 1500);
             
             // Show additional feedback
-            showFeedback('Session ID copied to clipboard', 'success');
+            displayFeedbackMessage('Session ID copied to clipboard', 'success');
           });
         }
       }
@@ -870,7 +803,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.api.sendCurrentOutput(activeTerminalId, output);
     
     // Visual feedback
-    showFeedback('Output sent successfully', 'success');
+    displayFeedbackMessage('Output sent successfully', 'success');
   }
   
   // Initialize settings modal
@@ -952,7 +885,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
           
           // Show feedback message
-          showFeedback(`${toggleElem.checked ? 'Enabled' : 'Disabled'} ${id.replace(/-/g, ' ')}`, 'info');
+          displayFeedbackMessage(`${toggleElem.checked ? 'Enabled' : 'Disabled'} ${id.replace(/-/g, ' ')}`, 'info');
         });
       }
     });
@@ -961,7 +894,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const rendererTypeSelect = document.getElementById('renderer-type');
     if (rendererTypeSelect) {
       rendererTypeSelect.addEventListener('change', () => {
-        showFeedback(`Renderer type will be set to ${rendererTypeSelect.value}`, 'info');
+        displayFeedbackMessage(`Renderer type will be set to ${rendererTypeSelect.value}`, 'info');
       });
     }
     
@@ -973,7 +906,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           // Real-time preview of cursor style
           terminals[activeTerminalId].term.options.cursorStyle = cursorStyleSelect.value;
           terminals[activeTerminalId].term.refresh(0, terminals[activeTerminalId].term.rows - 1);
-          showFeedback(`Cursor style changed to ${cursorStyleSelect.value}`, 'info');
+          displayFeedbackMessage(`Cursor style changed to ${cursorStyleSelect.value}`, 'info');
         }
       });
     }
@@ -1134,7 +1067,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.documentElement.className = currentTheme === 'dark' ? 'theme-dark' : 'theme-light';
     
     // Show success message
-    showFeedback('Settings saved', 'success');
+    displayFeedbackMessage('Settings saved', 'success');
   }
   
   // Reset to default settings
@@ -1172,7 +1105,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('restore-tabs').checked = defaultSettings.restoreTabs;
     
     // Show feedback
-    showFeedback('Settings reset to defaults', 'info');
+    displayFeedbackMessage('Settings reset to defaults', 'info');
   }
   
   // Switch settings tab
@@ -1268,14 +1201,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       copyToClipboard,
       sendCurrentOutput,
       showSearchPanel, 
-      showFeedback,
+      displayFeedbackMessage,
       updateTabTitle,
       updateTerminalInfo,
       createTerminalForSession,
       setActiveTerminal,
       loadCurrentSettings,
       showSettingsModal,
-      // Theme and font management functions
       toggleTheme,
       changeFontSize,
       toggleMenuBar,
@@ -1284,8 +1216,6 @@ document.addEventListener('DOMContentLoaded', async () => {
           terminals[activeTerminalId].fitAddon.fit();
         }
       },
-      // window.api is globally accessible
-      // themes object is accessible by toggleTheme, createTerminalForSession via closure
     };
     initializeAllEventListeners(terminalInterface);
     
@@ -1301,182 +1231,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Create terminal footer element with blue border
     createTerminalFooter();
     
-    // Add CSS for blue borders and terminal styling
-    const style = document.createElement('style');
-    style.textContent += `
-      /* Terminal blue border styling */
-      .terminal-instance {
-        border-radius: var(--terminal-radius);
-        overflow: hidden;
-        transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
-        opacity: 1;
-        position: relative;
-        border: 1px solid #0078d7;
-        box-shadow: 0 0 0 1px rgba(0, 120, 215, 0.2);
-      }
-      
-      .terminal-container {
-        border: 2px solid #0078d7;
-        border-radius: var(--terminal-radius);
-        overflow: hidden;
-        box-shadow: 0 0 10px rgba(0, 120, 215, 0.3);
-      }
-      
-      #terminals-container {
-        border: 1px solid #0078d7;
-        border-radius: var(--terminal-radius);
-        overflow: hidden;
-        margin: 4px;
-        box-shadow: inset 0 0 5px rgba(0, 120, 215, 0.3);
-      }
-      
-      .tab.active {
-        border-top: 2px solid #0078d7;
-        border-left: 1px solid #0078d7;
-        border-right: 1px solid #0078d7;
-      }
-      
-      /* Status bar with no border */
-      .status-bar {
-        border-top: none;
-        border-bottom: none;
-        position: relative;
-        padding-bottom: 4px;
-        margin-bottom: 1px;
-      }
-      
-      /* Remove status bar blue glow */
-      .status-bar::after {
-        display: none;
-      }
-      
-      /* Remove blue styled footer */
-      .terminal-footer {
-        display: none;
-      }
-      
-      /* Window border - remove all borders */
-      body {
-        border: none;
-      }
-      
-      /* Create a horizontal blue line at the bottom of the tab bar - remove it */
-      .tabs-container::after {
-        display: none;
-      }
-      
-      /* Terminal glow effect */
-      .terminal-instance.active {
-        box-shadow: 0 0 0 1px #0078d7, 0 0 8px rgba(0, 120, 215, 0.6);
-      }
-      
-      .terminal-instance .xterm {
-        padding: 8px;
-      }
-      
-      /* Blue glow animation for active terminal */
-      .terminal-instance.active .xterm {
-        animation: blue-terminal-glow 3s ease-in-out infinite alternate;
-      }
-      
-      @keyframes blue-terminal-glow {
-        0% {
-          box-shadow: 0 0 5px rgba(0, 120, 215, 0.3);
-        }
-        100% {
-          box-shadow: 0 0 15px rgba(0, 120, 215, 0.5);
-        }
-      }
-      
-      /* Blue tinted selection */
-      .xterm-selection {
-        background-color: rgba(0, 120, 215, 0.3) !important;
-      }
-      
-      /* Blue focus outline for tabs */
-      .tab:focus {
-        outline: 2px solid #0078d7;
-        outline-offset: -1px;
-      }
-      
-      /* Accent color definition */
-      :root {
-        --accent-color: #0078d7;
-        --primary-glow: rgba(0, 120, 215, 0.15);
-      }
-      
-      /* Title bar with blue styling */
-      .titlebar, .window-titlebar {
-        border-bottom: none; /* Remove border from title bar */
-        box-shadow: none;
-      }
-      
-      /* Only keep blue borders at the bottom */
-      .tabs-container {
-        border-bottom: none; /* Remove blue border from tabs container */
-      }
-      
-      /* Blue tabs styling */
-      .tab {
-        border-bottom: none;
-      }
-      
-      .tab::before {
-        background: #0078d7;
-      }
-      
-      .tabs-container {
-        border-bottom: 1px solid #0078d7;
-      }
-      
-      /* Blue styling for menu and buttons */
-      .dropdown-menu {
-        border: 1px solid #0078d7;
-        box-shadow: 0 4px 12px rgba(0, 120, 215, 0.2);
-      }
-      
-      .dropdown-menu-item:hover {
-        background-color: rgba(0, 120, 215, 0.1);
-      }
-      
-      button:hover, .btn:hover {
-        background-color: rgba(0, 120, 215, 0.1);
-      }
-      
-      /* Search panel with blue accents */
-      #search-panel {
-        border: 1px solid #0078d7;
-      }
-      
-      #search-input:focus {
-        border-color: #0078d7;
-        box-shadow: 0 0 0 2px rgba(0, 120, 215, 0.2);
-      }
-      
-      /* Session ID with blue accent */
-      .session-id::before {
-        background-color: #0078d7;
-      }
-    `;
-    document.head.appendChild(style);
-    
-    // Create initial terminal
-    createNewTerminal();
-  }
-  
-  // Create a terminal footer with a blue border
-  function createTerminalFooter() {
-    const footer = document.createElement('div');
-    footer.className = 'terminal-footer';
-    document.body.appendChild(footer);
-  }
-  
-  // Start the app
-  init();
-
-  // Add CSS for new tab button
-  const newTabButtonStyle = document.createElement('style');
-  newTabButtonStyle.textContent = `
+    const newTabButtonStyle = document.createElement('style');
+    newTabButtonStyle.textContent = `
     /* New Tab Button styling */
     #new-tab-button {
       display: flex;
@@ -1529,5 +1285,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       stroke: #bd93f9;
     }
   `;
-  document.head.appendChild(newTabButtonStyle);
+    document.head.appendChild(newTabButtonStyle);
+    
+    createNewTerminal();
+  }
+  
+  // Create a terminal footer with a blue border
+  function createTerminalFooter() {
+    const footer = document.createElement('div');
+    footer.className = 'terminal-footer';
+    document.body.appendChild(footer);
+  }
+  
+  // Start the app
+  init();
 });
