@@ -1,50 +1,63 @@
-// preload.js
+// Preload script for the terminal window
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Securely expose specific IPC functionality to the renderer process
-contextBridge.exposeInMainWorld('electronAPI', {
-  send: (channel, data) => {
-    // Whitelist channels
-    const validChannels = ['pty-input', 'terminal-resize', 'terminal-send-current-output'];
-    if (validChannels.includes(channel)) {
-      // Validate data for 'pty-input'
-      if (channel === 'pty-input') {
-        if (data && typeof data.input === 'string') {
-          ipcRenderer.send(channel, data);
-        } else {
-          console.error('Invalid data for pty-input:', data);
-        }
-      } else {
-        ipcRenderer.send(channel, data);
+// Expose API to the renderer process
+contextBridge.exposeInMainWorld('api', {
+  // Terminal control
+  sendTerminalInput: (sessionId, data) => {
+    ipcRenderer.send('pty-input', { sessionId, data });
+  },
+  resizeTerminal: (sessionId, cols, rows) => {
+    ipcRenderer.send('terminal-resize', { sessionId, cols, rows });
+  },
+  closeTerminal: (sessionId) => {
+    ipcRenderer.send('close-window', sessionId);
+  },
+  sendCurrentOutput: (sessionId, output) => {
+    ipcRenderer.send('terminal-send-current-output', { sessionId, output });
+  },
+  
+  // Settings
+  getSettings: () => {
+    // Default settings if not available from main process
+    return {
+      appearance: {
+        fontFamily: 'Consolas, monospace',
+        fontSize: 14,
+        cursorStyle: 'block',
+        cursorBlink: true,
+        theme: 'dark'
+      },
+      terminal: {
+        scrollback: 1000,
+        autoLineHeight: true,
+        enableBell: false
       }
-    } else {
-      console.error(`Attempted to send on invalid channel: ${channel}`);
-    }
+    };
   },
-  on: (channel, func) => {
-    const validChannels = ['pty-output', 'terminal-output', 'terminal-exit', 'session-id', 'terminal-error']; // Added other channels used in main.js
-    if (validChannels.includes(channel)) {
-      // Deliberately strip event as it includes `sender`
-      ipcRenderer.on(channel, (event, ...args) => func(...args));
-    } else {
-      console.error(`Attempted to listen on invalid channel: ${channel}`);
-    }
+  
+  // Window control
+  closeWindow: () => {
+    ipcRenderer.send('window:close');
   },
-  // It's good practice to also provide a way to remove listeners
-  removeListener: (channel, func) => {
-    const validChannels = ['pty-output', 'terminal-output', 'terminal-exit', 'session-id', 'terminal-error'];
-    if (validChannels.includes(channel)) {
-      ipcRenderer.removeListener(channel, func);
-    } else {
-      console.error(`Attempted to remove listener on invalid channel: ${channel}`);
-    }
+  minimizeWindow: () => {
+    ipcRenderer.send('window:minimize');
   },
-  removeAllListeners: (channel) => {
-    const validChannels = ['pty-output', 'terminal-output', 'terminal-exit', 'session-id', 'terminal-error'];
-    if (validChannels.includes(channel)) {
-      ipcRenderer.removeAllListeners(channel);
-    } else {
-      console.error(`Attempted to remove all listeners on invalid channel: ${channel}`);
-    }
+  maximizeWindow: () => {
+    ipcRenderer.send('window:maximize');
+  },
+  toggleFullscreen: () => {
+    ipcRenderer.send('window:toggle-fullscreen');
+  },
+  
+  // Events from main process
+  onTerminalData: (callback) => {
+    ipcRenderer.on('pty-output', (event, data) => callback(data));
+  },
+  onTerminalExit: (callback) => {
+    ipcRenderer.on('terminal-exit', (event, exitCode) => callback(exitCode));
+  },
+  onSessionId: (callback) => {
+    ipcRenderer.on('session-id', (event, sessionId) => callback(sessionId));
   }
 });

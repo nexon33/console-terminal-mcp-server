@@ -1,0 +1,258 @@
+/* Terminal CSS */
+:root {
+  --header-height: 38px;
+  --status-bar-height: 24px;
+  --accent-color: #007acc;
+  --background-dark: #1e1e1e;
+  --background-light: #f5f5f5;
+  --foreground-dark: #d4d4d4;
+  --foreground-light: #333333;
+  --header-dark: #252526;
+  --header-light: #e0e0e0;
+  --border-dark: #444444;
+  --border-light: #cccccc;
+}
+
+/* Themes */
+.theme-dark {
+  --background: var(--background-dark);
+  --foreground: var(--foreground-dark);
+  --header-bg: var(--header-dark);
+  --border-color: var(--border-dark);
+}
+
+.theme-light {
+  --background: var(--background-light);
+  --foreground: var(--foreground-light);
+  --header-bg: var(--header-light);
+  --border-color: var(--border-light);
+}
+
+/* General Styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  background-color: var(--background);
+  color: var(--foreground);
+  height: 100vh;
+  overflow: hidden;
+  user-select: none;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* Header Bar */
+.unified-header {
+  height: var(--header-height);
+  background-color: var(--header-bg);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  -webkit-app-region: drag; /* Allow dragging from header */
+  border-bottom: 1px solid var(--border-color);
+}
+
+.app-icon {
+  margin-right: 8px;
+  color: var(--foreground);
+}
+
+.app-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.header-spacer {
+  flex-grow: 1;
+}
+
+.action-buttons {
+  display: flex;
+  margin-right: 16px;
+  -webkit-app-region: no-drag; /* Allow button clicks */
+}
+
+.action-button {
+  background: transparent;
+  border: none;
+  color: var(--foreground);
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  cursor: pointer;
+  outline: none;
+}
+
+.action-button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.action-button:active {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Window Controls */
+.window-controls {
+  display: flex;
+  -webkit-app-region: no-drag; /* Allow button clicks */
+}
+
+.window-control {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  outline: none;
+  cursor: pointer;
+}
+
+.window-control.minimize:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.window-control.maximize:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.window-control.close:hover {
+  background-color: #e81123;
+}
+
+.window-control.close:hover svg path {
+  stroke: white;
+}
+
+/* Terminal Container */
+.terminal-container {
+  flex-grow: 1;
+  position: relative;
+  overflow: hidden;
+  padding: 4px;
+}
+
+/* Make the terminal fill its container */
+.xterm {
+  width: 100%;
+  height: 100%;
+}
+
+/* Status Bar */
+.status-bar {
+  height: var(--status-bar-height);
+  background-color: var(--header-bg);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 10px;
+  border-top: 1px solid var(--border-color);
+  font-size: 12px;
+}
+
+.status-items-left, .status-items-right {
+  display: flex;
+  align-items: center;
+}
+
+.status-item {
+  margin-right: 15px;
+}
+
+.status-items-right .status-item {
+  margin-right: 0;
+  margin-left: 15px;
+}
+
+/* Context Menu */
+.context-menu {
+  position: absolute;
+  background-color: var(--background);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  min-width: 160px;
+  z-index: 1000;
+  display: none;
+}
+
+.context-menu.show {
+  display: block;
+}
+
+.context-menu-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.context-menu-item:hover {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.context-menu-separator {
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 4px 0;
+}
+
+.menu-icon {
+  margin-right: 8px;
+  font-size: 14px;
+  width: 16px;
+  text-align: center;
+}
+
+/* Ensure Terminal Addons Are Styled Correctly */
+.xterm-search-bar {
+  background-color: var(--header-bg);
+  padding: 5px;
+  display: flex;
+  align-items: center;
+}
+
+.xterm-search-input {
+  flex-grow: 1;
+  margin: 0 5px;
+  padding: 3px 6px;
+  background-color: var(--background);
+  color: var(--foreground);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.5);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.7);
+}

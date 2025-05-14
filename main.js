@@ -5,26 +5,15 @@ import cors from 'cors';
 import bodyParser from 'body-parser';
 import path from 'path';
 import os from 'os';
-import { spawn as ptySpawn } from 'node-pty'; // Import only the spawn function
+import { spawn as ptySpawn } from 'node-pty';
 import { fileURLToPath } from 'url';
-// Removed MCP server import: import mcpServerSingleton from './mcp-server.js';
-
-// Helper function to send consistent API responses
-function sendApiResponse(res, statusCode, data) {
-  res.status(statusCode).json(data);
-}
-
-// Helper function to send error responses
-function sendErrorResponse(res, statusCode, message, sessionId = null) {
-  sendApiResponse(res, statusCode, { error: message, sessionId });
-}
+import mcpServerSingleton from './mcp-server.js';
 
 // Get the directory name in ES module scope
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const DEBUG = true;
-
 
 // Store active terminal sessions
 const terminals = new Map();
@@ -44,7 +33,7 @@ const PORT = 3000;
 
 // Basic security middleware
 const securityMiddleware = (req, res, next) => {
-  // Add rate limiting headers
+  // Add security headers
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-XSS-Protection', '1; mode=block');
@@ -67,17 +56,19 @@ const emptyPng = Buffer.from(
 );
 const emptyIcon = nativeImage.createFromBuffer(emptyPng);
 let tray = null;
-// Removed: let mcpServer = null;
+let mcpServer = null;
 
 // Initialize Electron app
 app.whenReady().then(() => {
   logger.info('Electron app is ready');
 
+  // Start the MCP server
+  mcpServer = mcpServerSingleton.start();
+  logger.info(`MCP Server started on port ${mcpServerSingleton.getPort()}`);
+
   // Start the API server
   apiServer.listen(PORT, () => {
     logger.info(`API server listening on port ${PORT}`);
-
-    // MCP Server is no longer started here. It runs standalone.
   });
 
   // Create tray icon using the transparent icon
@@ -93,7 +84,7 @@ app.whenReady().then(() => {
     { type: 'separator' },
     { label: 'Quit', click: () => app.quit() }
   ]);
-  tray.setToolTip('Command Terminal Electron');
+  tray.setToolTip('MCP Terminal');
   tray.setContextMenu(contextMenu);
 });
 
@@ -109,8 +100,11 @@ function createTerminalWindow(command, sessionId) {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js') // Uses the __dirname defined above
-    }
+      preload: path.join(__dirname, 'preload.js')
+    },
+    backgroundColor: '#1e1e1e',
+    show: false,
+    frame: true
   });
 
   // Register the session immediately with a placeholder
@@ -123,8 +117,8 @@ function createTerminalWindow(command, sessionId) {
     status: 'initializing',
     sessionId: sessionId,
     exitCode: null,
-    lastUnblockedOutput: null, // Initialize new property
-    lastUnblockedOutputTimestamp: null // Initialize new property
+    lastUnblockedOutput: null,
+    lastUnblockedOutputTimestamp: null
   });
 
   // Load the terminal UI
@@ -151,25 +145,7 @@ function createTerminalWindow(command, sessionId) {
         env: process.env
       };
 
-      // --- Runtime Type Validation ---
-      if (typeof shell !== 'string') {
-        throw new Error(`ptySpawn Pre-check Failed: 'shell' must be a string, got ${typeof shell}`);
-      }
-      // node-pty allows args to be string or string[], we expect array here based on prior logic
-      if (!Array.isArray(shellArgs)) {
-         logger.warn(`ptySpawn Pre-check Warning: 'shellArgs' was expected to be an array, but got ${typeof shellArgs}. Proceeding cautiously.`);
-         // If it MUST be an array based on your logic, throw here instead:
-         // throw new Error(`ptySpawn Pre-check Failed: 'shellArgs' must be an array, got ${typeof shellArgs}`);
-      }
-      if (typeof options !== 'object' || options === null || Array.isArray(options)) {
-         // This is the core check for the error message we are seeing
-        throw new Error(`ptySpawn Pre-check Failed: 'options' must be an object, got ${typeof options}${Array.isArray(options) ? ' (Array)' : ''}`);
-      }
-      // --- End Validation ---
-
-      logger.info(`DEBUG: About to call ptySpawn with shell='${shell}', args=${JSON.stringify(shellArgs)}, options=${JSON.stringify(options)}`); // Single log line before call
-
-      // Start the terminal process using the imported spawn function
+      // Start the terminal process
       const term = ptySpawn(shell, shellArgs, options);
 
       // Update the session with the process and running status
@@ -182,7 +158,6 @@ function createTerminalWindow(command, sessionId) {
       // Buffer for output lines
       let outputBuffer = '';
 
-      
       // Handle terminal output
       term.onData(data => {
         if (win && !win.isDestroyed()) {
@@ -194,7 +169,7 @@ function createTerminalWindow(command, sessionId) {
           outputBuffer += data;
 
           // Check for our exit code marker
-          const markerMatch = outputBuffer.match(/__EXITCODE_MARK__:(-?\d+)/);
+          const markerMatch = outputBuffer.match(/__EXITCODE_MARK__:(-?\\d+)/);
           if (markerMatch) {
             session.exitCode = parseInt(markerMatch[1], 10);
             // Remove everything up to and including the marker from the buffer
@@ -231,6 +206,9 @@ function createTerminalWindow(command, sessionId) {
 
       // Tell window which session it's connected to
       win.webContents.send('session-id', sessionId);
+      
+      // Show the window now that it's ready
+      win.show();
     } catch (error) {
       logger.error('Failed to create terminal:', error);
       win.webContents.send('terminal-error', error.message);
@@ -262,16 +240,10 @@ function createTerminalWindow(command, sessionId) {
     }
   });
 
-  // NOTE: Consider adding logic here or elsewhere to clean up inactive or errored sessions
-  // from the 'terminals' map to prevent potential resource leaks over time.
-
   return win;
 }
 
 // Helper function to wait for command completion
-// NOTE: This logic involving pendingCompletionSignals and intervals is a bit complex.
-// Consider refactoring for clarity or using a more explicit state management approach
-// if further complexity is added.
 async function waitForCommandCompletion(sessionId) {
   return new Promise((resolve, reject) => {
     pendingCompletionSignals.set(sessionId, { resolve, reject }); // Store signals
@@ -349,15 +321,12 @@ apiServer.post('/execute', async (req, res) => {
     const { command } = req.body;
 
     if (!command || command.trim().length === 0) {
-      return sendErrorResponse(res, 400, 'Command is required and cannot be empty');
+      return res.status(400).json({ error: 'Command is required and cannot be empty' });
     }
 
     // Basic command validation
-    // NOTE: This is not a comprehensive security measure against command injection.
-    // More robust validation or sanitization might be needed depending on the use case
-    // and the environment where this server is deployed.
     if (command.includes('&&') || command.includes('||') || command.includes(';')) {
-      return sendErrorResponse(res, 400, 'Command chaining is not allowed');
+      return res.status(400).json({ error: 'Command chaining is not allowed' });
     }
 
     // Generate unique session ID
@@ -369,12 +338,12 @@ apiServer.post('/execute', async (req, res) => {
     // Wait for command completion and get output
     try {
       const result = await waitForCommandCompletion(sessionId);
-      sendApiResponse(res, 200, result);
+      res.json(result);
     } catch (error) {
       // If we get a timeout or other error, still return the session info
       const session = terminals.get(sessionId);
       if (session) {
-        sendApiResponse(res, 500, {
+        res.status(500).json({
           sessionId,
           command: session.command,
           output: session.buffer,
@@ -385,14 +354,12 @@ apiServer.post('/execute', async (req, res) => {
         });
       } else {
         logger.error('Error executing command:', error);
-        sendErrorResponse(res, 500, error.message || 'Failed to execute command');
+        res.status(500).json({ error: error.message || 'Failed to execute command' });
       }
     }
   } catch (error) {
     logger.error('Error executing command:', error);
-    // NOTE: Consider using a dedicated logging library (e.g., Winston, Pino) for more structured logging
-    // and easier debugging in production environments. This would replace logger.error calls.
-    sendErrorResponse(res, 500, error.message || 'Failed to execute command');
+    res.status(500).json({ error: error.message || 'Failed to execute command' });
   }
 });
 
@@ -403,19 +370,17 @@ apiServer.post('/execute/:sessionId', async (req, res) => {
     const { command } = req.body;
     
     if (!command || command.trim().length === 0) {
-      return sendErrorResponse(res, 400, 'Command is required and cannot be empty', sessionId);
+      return res.status(400).json({ error: 'Command is required and cannot be empty', sessionId });
     }
 
     if (!terminals.has(sessionId)) {
-      return sendErrorResponse(res, 404, 'Session not found', sessionId);
+      return res.status(404).json({ error: 'Session not found', sessionId });
     }
 
     const session = terminals.get(sessionId);
 
-    // CHANGE THIS CHECK - a session might have a previous command completed
-    // but still be available for more commands as long as the process exists
     if (session.process === null) {
-      return sendErrorResponse(res, 400, 'Session is not active', sessionId);
+      return res.status(400).json({ error: 'Session is not active', sessionId });
     }
     
     // Clear the buffer for the new command
@@ -441,12 +406,12 @@ apiServer.post('/execute/:sessionId', async (req, res) => {
     // Wait for command completion and get output
     try {
       const result = await waitForCommandCompletion(sessionId);
-      sendApiResponse(res, 200, result);
+      res.json(result);
     } catch (error) {
       // If we get a timeout or other error, still return the session info
       const currentSession = terminals.get(sessionId);
       if (currentSession) {
-        sendApiResponse(res, 500, {
+        res.status(500).json({
           sessionId,
           command: currentSession.command,
           output: currentSession.buffer,
@@ -457,12 +422,12 @@ apiServer.post('/execute/:sessionId', async (req, res) => {
         });
       } else {
         logger.error('Error executing command in session:', error);
-        sendErrorResponse(res, 500, error.message || 'Failed to execute command in session', sessionId);
+        res.status(500).json({ error: error.message || 'Failed to execute command in session', sessionId });
       }
     }
   } catch (error) {
     logger.error('Error executing command in session:', error);
-    sendErrorResponse(res, 500, error.message || 'Failed to execute command in session', sessionId);
+    res.status(500).json({ error: error.message || 'Failed to execute command in session' });
   }
 });
 
@@ -475,13 +440,13 @@ apiServer.get('/sessions', (req, res) => {
       status: session.status,
       startTime: session.startTime,
       exitCode: session.exitCode,
-      lastUnblockedOutputTimestamp: session.lastUnblockedOutputTimestamp // Add timestamp here for quick check
+      lastUnblockedOutputTimestamp: session.lastUnblockedOutputTimestamp
     }));
 
-    sendApiResponse(res, 200, { sessions });
+    res.json({ sessions });
   } catch (error) {
     logger.error('Error listing sessions:', error);
-    sendErrorResponse(res, 500, 'Failed to list sessions');
+    res.status(500).json({ error: 'Failed to list sessions' });
   }
 });
 
@@ -491,23 +456,23 @@ apiServer.get('/output/:sessionId', (req, res) => {
     const { sessionId } = req.params;
 
     if (!terminals.has(sessionId)) {
-      return sendErrorResponse(res, 404, 'Session not found', sessionId);
+      return res.status(404).json({ error: 'Session not found', sessionId });
     }
 
     const session = terminals.get(sessionId);
-    sendApiResponse(res, 200, {
+    res.json({
       sessionId,
       command: session.command,
-      output: session.buffer, // This is the full buffer
+      output: session.buffer,
       status: session.status,
       startTime: session.startTime,
       exitCode: session.exitCode,
-      lastUnblockedOutput: session.lastUnblockedOutput, // Include unblocked output
-      lastUnblockedOutputTimestamp: session.lastUnblockedOutputTimestamp // And its timestamp
+      lastUnblockedOutput: session.lastUnblockedOutput,
+      lastUnblockedOutputTimestamp: session.lastUnblockedOutputTimestamp
     });
   } catch (error) {
     logger.error('Error getting output:', error);
-    sendErrorResponse(res, 500, 'Failed to get command output', sessionId);
+    res.status(500).json({ error: 'Failed to get command output' });
   }
 });
 
@@ -517,7 +482,7 @@ apiServer.post('/stop/:sessionId', (req, res) => {
     const { sessionId } = req.params;
 
     if (!terminals.has(sessionId)) {
-      return sendErrorResponse(res, 404, 'Session not found', sessionId);
+      return res.status(404).json({ error: 'Session not found', sessionId });
     }
 
     const session = terminals.get(sessionId);
@@ -536,10 +501,10 @@ apiServer.post('/stop/:sessionId', (req, res) => {
 });
 
 // Handle IPC messages from renderer
-ipcMain.on('pty-input', (event, { sessionId, input }) => {
+ipcMain.on('pty-input', (event, { sessionId, data }) => {
   try {
     if (terminals.has(sessionId)) {
-      terminals.get(sessionId).process.write(input);
+      terminals.get(sessionId).process.write(data);
     }
   } catch (error) {
     logger.error('Error handling terminal input:', error);
@@ -556,9 +521,6 @@ ipcMain.on('terminal-send-current-output', (event, { sessionId, output }) => {
    if (session) {
      session.lastUnblockedOutput = output;
      session.lastUnblockedOutputTimestamp = new Date();
-     // For now, we just log. The actual "sending back" to the initiating MCP request
-     // would require modifying how the /execute or /output endpoints work,
-     // or a new mechanism for Claude Desktop to fetch this.
      logger.info(`[Session ${sessionId}] Unblocked output received. Length: ${output.length}`);
  
      // Check if there's a pending completion promise for this session
@@ -585,6 +547,8 @@ ipcMain.on('terminal-send-current-output', (event, { sessionId, output }) => {
    logger.error(`Error handling unblocked output for session ${sessionId}:`, error);
  }
 });
+
+// Terminal resize events
 ipcMain.on('terminal-resize', (event, { sessionId, cols, rows }) => {
   try {
     if (terminals.has(sessionId)) {
@@ -597,7 +561,41 @@ ipcMain.on('terminal-resize', (event, { sessionId, cols, rows }) => {
     logger.error('Error handling terminal resize:', error);
   }
 });
-// Add handler for closing specific windows
+
+// Window control events
+ipcMain.on('window:close', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) {
+    win.close();
+  }
+});
+
+ipcMain.on('window:minimize', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) {
+    win.minimize();
+  }
+});
+
+ipcMain.on('window:maximize', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) {
+    if (win.isMaximized()) {
+      win.unmaximize();
+    } else {
+      win.maximize();
+    }
+  }
+});
+
+ipcMain.on('window:toggle-fullscreen', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) {
+    win.setFullScreen(!win.isFullScreen());
+  }
+});
+
+// Close specific windows
 ipcMain.on('close-window', (event, sessionId) => {
   try {
     const session = terminals.get(sessionId);
@@ -608,13 +606,6 @@ ipcMain.on('close-window', (event, sessionId) => {
     logger.error('Error closing window:', error);
   }
 });
-
-// For Electron 25+ (if available)
-try {
-  app.quitOnWindowAllClosed = false;
-} catch (e) {
-  // Ignore if not supported
-}
 
 // Prevent app from quitting when all windows are closed
 app.on('window-all-closed', (e) => {
@@ -645,5 +636,10 @@ app.on('before-quit', () => {
       }
     }
     terminals.delete(sessionId);
+  }
+  
+  // Stop the MCP server
+  if (mcpServer) {
+    mcpServerSingleton.stop();
   }
 });
