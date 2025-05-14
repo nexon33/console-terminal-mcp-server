@@ -1617,6 +1617,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     
+    // Note: The menu-settings click event listener is already defined in initMenuActions
+    
     // Close button
     closeButton.addEventListener('click', () => {
       hideSettingsModal();
@@ -1655,6 +1657,54 @@ document.addEventListener('DOMContentLoaded', async () => {
         fontSizeInput.value = currentValue + 1;
       }
     });
+    
+    // Toggle switches - add real-time visual feedback
+    const toggleSwitches = [
+      'cursor-blink',
+      'copy-on-select', 
+      'allow-transparency', 
+      'mac-option-is-meta',
+      'restore-tabs'
+    ];
+    
+    toggleSwitches.forEach(id => {
+      const toggleElem = document.getElementById(id);
+      if (toggleElem) {
+        // Add click event to provide immediate visual feedback
+        toggleElem.addEventListener('change', () => {
+          // Optional: Add visual feedback or real-time preview
+          if (id === 'cursor-blink' && activeTerminalId && terminals[activeTerminalId]) {
+            // Real-time preview of cursor blink
+            terminals[activeTerminalId].term.options.cursorBlink = toggleElem.checked;
+            terminals[activeTerminalId].term.refresh(0, terminals[activeTerminalId].term.rows - 1);
+          }
+          
+          // Show feedback message
+          showFeedback(`${toggleElem.checked ? 'Enabled' : 'Disabled'} ${id.replace(/-/g, ' ')}`, 'info');
+        });
+      }
+    });
+    
+    // Add listener for renderer type changes to provide feedback
+    const rendererTypeSelect = document.getElementById('renderer-type');
+    if (rendererTypeSelect) {
+      rendererTypeSelect.addEventListener('change', () => {
+        showFeedback(`Renderer type will be set to ${rendererTypeSelect.value}`, 'info');
+      });
+    }
+    
+    // Add listener to cursor style changes
+    const cursorStyleSelect = document.getElementById('cursor-style');
+    if (cursorStyleSelect) {
+      cursorStyleSelect.addEventListener('change', () => {
+        if (activeTerminalId && terminals[activeTerminalId]) {
+          // Real-time preview of cursor style
+          terminals[activeTerminalId].term.options.cursorStyle = cursorStyleSelect.value;
+          terminals[activeTerminalId].term.refresh(0, terminals[activeTerminalId].term.rows - 1);
+          showFeedback(`Cursor style changed to ${cursorStyleSelect.value}`, 'info');
+        }
+      });
+    }
     
     // Close on escape key
     document.addEventListener('keydown', (e) => {
