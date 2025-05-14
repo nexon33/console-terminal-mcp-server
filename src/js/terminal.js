@@ -13,51 +13,95 @@ document.addEventListener('DOMContentLoaded', async () => {
   let currentFontSize = 14;
   let currentTheme = 'dark';
   
-  // Terminal themes
+  // Advanced terminal themes with glassmorphism support
   const themes = {
     dark: {
-      background: '#1a1a1a',
-      foreground: '#f0f0f0',
-      black: '#000000',
-      red: '#e74c3c',
-      green: '#2ecc71',
-      yellow: '#f1c40f',
-      blue: '#3498db',
-      magenta: '#9b59b6',
-      cyan: '#1abc9c',
-      white: '#ecf0f1',
-      brightBlack: '#95a5a6',
-      brightRed: '#e74c3c',
-      brightGreen: '#2ecc71',
-      brightYellow: '#f1c40f',
-      brightBlue: '#3498db',
-      brightMagenta: '#9b59b6',
-      brightCyan: '#1abc9c',
+      background: 'rgba(22, 22, 26, 0.95)',
+      foreground: '#f2f2f2',
+      black: '#121212',
+      red: '#ff5f56',
+      green: '#27c93f',
+      yellow: '#ffbd2e',
+      blue: '#61afef',
+      magenta: '#c678dd',
+      cyan: '#56b6c2',
+      white: '#dcdfe4',
+      brightBlack: '#5a6374',
+      brightRed: '#ff6e67',
+      brightGreen: '#5af78e',
+      brightYellow: '#ffcc95',
+      brightBlue: '#65b9ff',
+      brightMagenta: '#d599ef',
+      brightCyan: '#67d3c2',
       brightWhite: '#ffffff',
-      selectionBackground: 'rgba(255, 255, 255, 0.3)',
-      cursor: '#f0f0f0'
+      selectionBackground: 'rgba(255, 255, 255, 0.2)',
+      cursor: '#f2f2f2'
     },
     light: {
-      background: '#ffffff',
+      background: 'rgba(245, 245, 245, 0.92)',
       foreground: '#333333',
       black: '#000000',
-      red: '#c0392b',
-      green: '#27ae60',
-      yellow: '#f39c12',
-      blue: '#2980b9',
-      magenta: '#8e44ad',
-      cyan: '#16a085',
-      white: '#bdc3c7',
-      brightBlack: '#7f8c8d',
-      brightRed: '#e74c3c',
-      brightGreen: '#2ecc71',
-      brightYellow: '#f1c40f',
-      brightBlue: '#3498db',
-      brightMagenta: '#9b59b6',
-      brightCyan: '#1abc9c',
-      brightWhite: '#ecf0f1',
-      selectionBackground: 'rgba(0, 0, 0, 0.15)',
+      red: '#e45649',
+      green: '#50a14f',
+      yellow: '#c18401',
+      blue: '#0184bc',
+      magenta: '#a626a4',
+      cyan: '#0997b3',
+      white: '#bfbfbf',
+      brightBlack: '#777777',
+      brightRed: '#f07178',
+      brightGreen: '#7eca9c',
+      brightYellow: '#e5c07b',
+      brightBlue: '#82aaff',
+      brightMagenta: '#c792ea',
+      brightCyan: '#7fdbca',
+      brightWhite: '#ffffff',
+      selectionBackground: 'rgba(0, 0, 0, 0.1)',
       cursor: '#333333'
+    },
+    nord: {
+      background: 'rgba(46, 52, 64, 0.95)',
+      foreground: '#d8dee9',
+      black: '#3b4252',
+      red: '#bf616a',
+      green: '#a3be8c',
+      yellow: '#ebcb8b',
+      blue: '#81a1c1',
+      magenta: '#b48ead',
+      cyan: '#88c0d0',
+      white: '#e5e9f0',
+      brightBlack: '#4c566a',
+      brightRed: '#bf616a',
+      brightGreen: '#a3be8c',
+      brightYellow: '#ebcb8b',
+      brightBlue: '#81a1c1',
+      brightMagenta: '#b48ead',
+      brightCyan: '#8fbcbb',
+      brightWhite: '#eceff4',
+      selectionBackground: 'rgba(216, 222, 233, 0.2)',
+      cursor: '#d8dee9'
+    },
+    dracula: {
+      background: 'rgba(40, 42, 54, 0.95)',
+      foreground: '#f8f8f2',
+      black: '#21222c',
+      red: '#ff5555',
+      green: '#50fa7b',
+      yellow: '#f1fa8c',
+      blue: '#bd93f9',
+      magenta: '#ff79c6',
+      cyan: '#8be9fd',
+      white: '#f8f8f2',
+      brightBlack: '#6272a4',
+      brightRed: '#ff6e6e',
+      brightGreen: '#69ff94',
+      brightYellow: '#ffffa5',
+      brightBlue: '#d6acff',
+      brightMagenta: '#ff92df',
+      brightCyan: '#a4ffff',
+      brightWhite: '#ffffff',
+      selectionBackground: 'rgba(248, 248, 242, 0.2)',
+      cursor: '#f8f8f2'
     }
   };
   
@@ -77,6 +121,61 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('close-btn').addEventListener('click', () => {
       window.api.closeWindow();
     });
+    
+    // Enhance title bar with custom drag area
+    const titleBar = document.querySelector('.titlebar') || document.querySelector('.window-titlebar');
+    if (titleBar) {
+      titleBar.innerHTML = `
+        <div class="titlebar-drag-region"></div>
+        <div class="titlebar-app-icon">
+          <svg viewBox="0 0 24 24">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="8" y1="9" x2="16" y2="9"></line>
+            <line x1="8" y1="13" x2="14" y2="13"></line>
+            <line x1="8" y1="17" x2="12" y2="17"></line>
+          </svg>
+        </div>
+        <div class="titlebar-title">MCP Terminal</div>
+        <div class="titlebar-controls">
+          <button id="minimize-btn" class="titlebar-button" title="Minimize">
+            <svg viewBox="0 0 12 12"><rect x="2" y="5.5" width="8" height="1"></rect></svg>
+          </button>
+          <button id="maximize-btn" class="titlebar-button" title="Maximize">
+            <svg viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" fill="none" stroke-width="1"></rect></svg>
+          </button>
+          <button id="close-btn" class="titlebar-button titlebar-close" title="Close">
+            <svg viewBox="0 0 12 12"><line x1="3" y1="3" x2="9" y2="9"></line><line x1="9" y1="3" x2="3" y2="9"></line></svg>
+          </button>
+        </div>
+      `;
+      
+      // Re-add event listeners to new elements
+      document.getElementById('minimize-btn').addEventListener('click', () => {
+        window.api.minimizeWindow();
+      });
+      
+      document.getElementById('maximize-btn').addEventListener('click', () => {
+        window.api.maximizeWindow();
+        updateMaximizeButtonState();
+      });
+      
+      document.getElementById('close-btn').addEventListener('click', () => {
+        window.api.closeWindow();
+      });
+    }
+    
+    // Enhance new tab button
+    const newTabButton = document.getElementById('new-tab-button');
+    if (newTabButton) {
+      newTabButton.innerHTML = `
+        <svg viewBox="0 0 24 24">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+      `;
+      newTabButton.title = "New Terminal (Ctrl+Shift+T)";
+      newTabButton.setAttribute('data-tooltip', 'New Terminal (Ctrl+Shift+T)');
+    }
     
     // Search button in top bar
     document.getElementById('search-btn')?.addEventListener('click', () => {
@@ -581,9 +680,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         contextMenu.style.left = `${e.pageX}px`;
         contextMenu.style.top = `${e.pageY}px`;
         
-        // Show the menu
+        // Ensure it stays in viewport
+        const rect = contextMenu.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        if (rect.right > viewportWidth) {
+          contextMenu.style.left = `${e.pageX - rect.width}px`;
+        }
+        
+        if (rect.bottom > viewportHeight) {
+          contextMenu.style.top = `${e.pageY - rect.height}px`;
+        }
+        
+        // Show the menu with animation
         contextMenu.classList.add('show');
         contextMenuVisible = true;
+        
+        // Add animation class
+        contextMenu.classList.add('context-menu-appear');
+        setTimeout(() => {
+          contextMenu.classList.remove('context-menu-appear');
+        }, 300);
       }
       
       // For 'select' behavior, the terminal will handle word selection automatically
@@ -598,6 +716,56 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
     
+    // Update context menu HTML with icons
+    if (contextMenu) {
+      contextMenu.innerHTML = `
+        <div class="context-menu-header">Terminal Actions</div>
+        <div class="context-menu-item" data-action="copy">
+          <span class="context-menu-icon">
+            <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          </span>
+          <span>Copy</span>
+          <span class="context-menu-shortcut">Ctrl+C</span>
+        </div>
+        <div class="context-menu-item" data-action="paste">
+          <span class="context-menu-icon">
+            <svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+          </span>
+          <span>Paste</span>
+          <span class="context-menu-shortcut">Ctrl+V</span>
+        </div>
+        <div class="context-menu-item" data-action="clear">
+          <span class="context-menu-icon">
+            <svg viewBox="0 0 24 24"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          </span>
+          <span>Clear Terminal</span>
+          <span class="context-menu-shortcut">Ctrl+K</span>
+        </div>
+        <div class="context-menu-separator"></div>
+        <div class="context-menu-item" data-action="send-output">
+          <span class="context-menu-icon">
+            <svg viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+          </span>
+          <span>Send Output</span>
+        </div>
+        <div class="context-menu-item" data-action="new-tab">
+          <span class="context-menu-icon">
+            <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          </span>
+          <span>New Tab</span>
+          <span class="context-menu-shortcut">Ctrl+Shift+T</span>
+        </div>
+        <div class="context-menu-separator"></div>
+        <div class="context-menu-item" data-action="dev-tools">
+          <span class="context-menu-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+          </span>
+          <span>Developer Tools</span>
+          <span class="context-menu-shortcut">F12</span>
+        </div>
+      `;
+    }
+    
     // Handle context menu actions
     contextMenu.addEventListener('click', (e) => {
       const action = e.target.closest('.context-menu-item')?.dataset.action;
@@ -607,6 +775,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         case 'copy':
           if (activeTerminalId && terminals[activeTerminalId] && terminals[activeTerminalId].term.hasSelection()) {
             navigator.clipboard.writeText(terminals[activeTerminalId].term.getSelection());
+            showFeedback('Text copied to clipboard', 'success');
           }
           break;
         
@@ -621,6 +790,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         case 'clear':
           if (activeTerminalId && terminals[activeTerminalId]) {
             terminals[activeTerminalId].term.clear();
+            showFeedback('Terminal cleared', 'info');
           }
           break;
         
@@ -640,6 +810,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Hide the menu
       contextMenu.classList.remove('show');
       contextMenuVisible = false;
+    });
+    
+    // Add hover effects to menu items
+    const menuItems = contextMenu.querySelectorAll('.context-menu-item');
+    menuItems.forEach(item => {
+      item.addEventListener('mouseenter', () => {
+        item.classList.add('active');
+      });
+      
+      item.addEventListener('mouseleave', () => {
+        item.classList.remove('active');
+      });
     });
   }
   
@@ -828,15 +1010,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Toggle theme
   function toggleTheme() {
-    currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
-    const newTheme = currentTheme === 'dark' ? 'theme-dark' : 'theme-light';
+    // Get the next theme in rotation
+    // Cycle between dark, light, nord, dracula
+    const themeOrder = ['dark', 'light', 'nord', 'dracula'];
+    const currentIndex = themeOrder.indexOf(currentTheme);
+    const nextIndex = (currentIndex + 1) % themeOrder.length;
+    currentTheme = themeOrder[nextIndex];
+    
+    // Apply the new theme class
+    const newThemeClass = `theme-${currentTheme}`;
     
     // Add transition class to body for smooth theme change
     document.body.classList.add('theme-transition');
     
     // Change theme with delay for transition
     setTimeout(() => {
-      document.documentElement.className = newTheme;
+      // Remove all theme classes
+      document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-nord', 'theme-dracula');
+      // Add the new theme class
+      document.documentElement.classList.add(newThemeClass);
       
       // Update terminal themes
       Object.values(terminals).forEach(terminal => {
@@ -883,7 +1075,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
   
-  // Show feedback message
+  // Show feedback message with improved styling
   function showFeedback(message, type = 'success') {
     const feedbackElement = document.createElement('div');
     feedbackElement.textContent = message;
@@ -896,8 +1088,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     feedbackElement.style.zIndex = '1000';
     feedbackElement.style.display = 'flex';
     feedbackElement.style.alignItems = 'center';
-    feedbackElement.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.2)';
-    feedbackElement.style.animation = 'success-feedback 2s forwards';
+    feedbackElement.style.boxShadow = '0 10px 30px rgba(0, 0, 0, 0.3)';
+    feedbackElement.style.animation = 'feedbackAnim 0.3s forwards, feedbackFade 2s forwards 0.5s';
+    feedbackElement.style.backdropFilter = 'blur(8px)';
     
     // Add icon based on type
     const icon = document.createElement('span');
@@ -905,18 +1098,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     icon.style.fontSize = '18px';
     
     if (type === 'success') {
-      feedbackElement.style.backgroundColor = 'rgba(46, 204, 113, 0.9)';
+      feedbackElement.style.backgroundColor = 'rgba(46, 204, 113, 0.85)';
       feedbackElement.style.color = 'white';
       icon.textContent = '✓';
     } else if (type === 'error') {
-      feedbackElement.style.backgroundColor = 'rgba(231, 76, 60, 0.9)';
+      feedbackElement.style.backgroundColor = 'rgba(231, 76, 60, 0.85)';
       feedbackElement.style.color = 'white';
       icon.textContent = '✕';
     } else if (type === 'info') {
-      feedbackElement.style.backgroundColor = 'rgba(52, 152, 219, 0.9)';
+      feedbackElement.style.backgroundColor = 'rgba(52, 152, 219, 0.85)';
       feedbackElement.style.color = 'white';
       icon.textContent = 'ℹ';
     }
+    
+    // Add animation keyframes
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes feedbackAnim {
+        0% { opacity: 0; transform: translate(-50%, -40%); }
+        100% { opacity: 1; transform: translate(-50%, -50%); }
+      }
+      
+      @keyframes feedbackFade {
+        0% { opacity: 1; transform: translate(-50%, -50%); }
+        80% { opacity: 1; transform: translate(-50%, -50%); }
+        100% { opacity: 0; transform: translate(-50%, -40%); }
+      }
+    `;
+    document.head.appendChild(style);
     
     feedbackElement.prepend(icon);
     document.body.appendChild(feedbackElement);
@@ -926,7 +1135,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (feedbackElement.parentNode) {
         feedbackElement.parentNode.removeChild(feedbackElement);
       }
-    }, 2000);
+      if (style.parentNode) {
+        style.parentNode.removeChild(style);
+      }
+    }, 2500);
   }
   
   // Create a new terminal tab
@@ -1121,6 +1333,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     tab.className = 'tab';
     tab.dataset.sessionId = sessionId;
     tab.innerHTML = `
+      <span class="tab-icon">
+        <svg viewBox="0 0 24 24" class="tab-icon-svg">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="8" y1="9" x2="16" y2="9"></line>
+          <line x1="8" y1="13" x2="14" y2="13"></line>
+          <line x1="8" y1="17" x2="12" y2="17"></line>
+        </svg>
+      </span>
       <span class="tab-title">Terminal</span>
       <span class="tab-close">×</span>
     `;
@@ -1128,7 +1348,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Add appear animation
     tab.style.opacity = '0';
     tab.style.transform = 'translateY(-10px)';
-    tab.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+    tab.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
     
     // Insert before the new tab button
     tabsContainer.insertBefore(tab, newTabButton);
@@ -1301,7 +1521,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       
       const { cols, rows } = terminals[sessionId].term;
-      document.getElementById('terminal-size').textContent = `${cols}×${rows}`;
+      const terminalSizeElement = document.getElementById('terminal-size');
+      terminalSizeElement.innerHTML = `<span class="terminal-size-icon"></span>${cols}×${rows}`;
+      
+      // Add tooltip if not already present
+      if (!terminalSizeElement.hasAttribute('data-tooltip')) {
+        terminalSizeElement.setAttribute('data-tooltip', 'Terminal dimensions');
+      }
     }
   }
   
@@ -2002,81 +2228,160 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Create search button if it doesn't exist
     createSearchButton();
     
-    // Add CSS for new animations
+    // Add CSS for title bar and improved layout
     const style = document.createElement('style');
-    style.textContent = `
-      .theme-transition {
-        transition: background-color 0.3s ease, color 0.3s ease;
+    style.textContent += `
+      /* Title bar styling */
+      .titlebar, .window-titlebar {
+        display: flex;
+        align-items: center;
+        height: 32px;
+        background: var(--glassmorphism-bg);
+        backdrop-filter: blur(12px);
+        border-bottom: 1px solid var(--glassmorphism-border);
+        user-select: none;
+        position: relative;
       }
       
-      .fade-out {
-        opacity: 0 !important;
-        transition: opacity 0.15s ease-out;
+      .titlebar-drag-region {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        -webkit-app-region: drag;
       }
       
-      .fade-in {
-        opacity: 0;
-        transition: opacity 0.15s ease-in;
+      .titlebar-app-icon {
+        width: 16px;
+        height: 16px;
+        margin: 0 10px;
+        z-index: 10;
+        position: relative;
       }
       
-      .tab.closing {
-        opacity: 0;
-        transform: scale(0.9);
-        transition: opacity 0.2s ease, transform 0.2s ease;
+      .titlebar-app-icon svg {
+        width: 100%;
+        height: 100%;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.5;
+        stroke-linecap: round;
+        stroke-linejoin: round;
       }
       
-      .loading-spinner {
-        width: 14px;
-        height: 14px;
-        border: 2px solid transparent;
-        border-top-color: var(--foreground);
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
-        margin-left: 8px;
+      .titlebar-title {
+        font-size: 13px;
+        font-weight: 500;
+        flex: 1;
+        z-index: 10;
+        position: relative;
       }
       
-      @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
+      .titlebar-controls {
+        display: flex;
+        z-index: 10;
+        position: relative;
+        -webkit-app-region: no-drag;
       }
       
-      .tab-rename-input {
+      .titlebar-button {
+        width: 46px;
+        height: 32px;
         background: transparent;
         border: none;
-        border-bottom: 1px solid var(--accent-color);
-        color: var(--foreground);
         outline: none;
-        padding: 2px 0;
-        font-size: 13px;
-        font-family: var(--font-primary);
-      }
-      
-      .search-btn {
         display: flex;
-        justify-content: center;
         align-items: center;
-        width: 28px;
-        height: 28px;
-        margin-right: 10px;
-        border-radius: 4px;
+        justify-content: center;
         cursor: pointer;
-        color: var(--foreground);
-        background-color: transparent;
         transition: background-color 0.2s;
       }
       
-      .search-btn:hover {
-        background-color: var(--hover-bg);
+      .titlebar-button:hover {
+        background-color: var(--background-lighter);
       }
       
-      .search-btn svg {
-        width: 16px;
-        height: 16px;
+      .titlebar-close:hover {
+        background-color: #e81123;
+        color: white;
+      }
+      
+      .titlebar-button svg {
+        width: 10px;
+        height: 10px;
+        fill: currentColor;
+        stroke: currentColor;
+        stroke-width: 1;
+      }
+      
+      /* Improved new tab button */
+      .new-tab-button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: var(--glassmorphism-bg);
+        border: 1px dashed var(--glassmorphism-border);
+        margin-top: 4px;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        opacity: 0.7;
+      }
+      
+      .new-tab-button:hover {
+        transform: rotate(90deg) scale(1.1);
+        opacity: 1;
+        background: var(--accent-color);
+        border: 1px solid var(--accent-color);
+        color: white;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      }
+      
+      .new-tab-button svg {
+        width: 14px;
+        height: 14px;
         fill: none;
         stroke: currentColor;
         stroke-width: 2;
         stroke-linecap: round;
         stroke-linejoin: round;
+      }
+      
+      /* Improved terminal colors and effects */
+      .terminal-instance .xterm {
+        padding: 8px;
+      }
+      
+      .terminal-instance.active .xterm {
+        animation: terminal-glow 2s ease-in-out infinite alternate;
+      }
+      
+      @keyframes terminal-glow {
+        0% {
+          box-shadow: 0 0 5px rgba(97, 175, 239, 0.1);
+        }
+        100% {
+          box-shadow: 0 0 15px rgba(97, 175, 239, 0.3);
+        }
+      }
+      
+      /* Main app container */
+      .app-container {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        background: var(--background);
+        overflow: hidden;
+      }
+      
+      /* Allow terminal container to fill remaining space */
+      .terminals-container {
+        flex: 1;
+        position: relative;
+        overflow: hidden;
       }
     `;
     document.head.appendChild(style);
