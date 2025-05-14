@@ -7,26 +7,57 @@
   <link rel="stylesheet" href="node_modules/xterm/css/xterm.css" />
   <link rel="stylesheet" href="src/css/terminal.css" />
   <style>
-    /* Additional styles to ensure proper menu bar behavior */
+    /* Additional styles for frameless window */
     body {
       overflow: hidden;
       margin: 0;
       padding: 0;
     }
     
-    /* Ensure app-menu-bar is properly styled and positioned */
+    /* Titlebar/menu bar with explicit drag region */
     .app-menu-bar {
       -webkit-app-region: drag;
       position: relative;
       z-index: 100;
       margin: 0;
       padding: 0;
+      height: var(--app-bar-height);
+      background-color: var(--header-bg);
+      user-select: none;
+      border-bottom: 1px solid var(--border-color);
+    }
+    
+    /* Make buttons and interactive elements not draggable */
+    .app-menu-bar .menu-item,
+    .app-menu-bar button,
+    .tab-controls,
+    .window-controls {
+      -webkit-app-region: no-drag;
+    }
+    
+    /* Ensure window controls are visible in frameless mode */
+    .window-controls {
+      display: flex;
+      margin-left: auto;
+    }
+    
+    /* Set explicit height for container with frameless mode */
+    .app-container {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    /* Ensure terminals container fills available space */
+    .terminals-container {
+      flex: 1;
+      overflow: hidden;
     }
   </style>
 </head>
 <body>
   <div class="app-container">
-    <!-- Main Application Bar -->
+    <!-- Main Application Bar - This is our custom titlebar -->
     <div class="app-menu-bar">
       <!-- App Icon and Main Menu Items -->
       <div class="app-menu-section">

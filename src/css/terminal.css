@@ -63,7 +63,7 @@ body {
   height: 100vh;
 }
 
-/* App Menu Bar */
+/* App Menu Bar - Custom Titlebar */
 .app-menu-bar {
   height: var(--app-bar-height);
   background-color: var(--header-bg);
@@ -79,6 +79,7 @@ body {
   display: flex;
   align-items: center;
   height: 100%;
+  -webkit-app-region: drag; /* Ensure this area is draggable */
 }
 
 .app-icon {
@@ -88,6 +89,7 @@ body {
 
 .flex-spacer {
   flex-grow: 1;
+  -webkit-app-region: drag; /* Ensure the spacer is draggable too */
 }
 
 /* Menu Items */
@@ -135,10 +137,12 @@ body {
   background-color: rgba(255, 255, 255, 0.1);
 }
 
-/* Window Controls */
+/* Window Controls - Updated for frameless window */
 .window-controls {
   display: flex;
   -webkit-app-region: no-drag; /* Allow button clicks */
+  height: 100%;
+  align-items: center;
 }
 
 .window-control {
@@ -151,6 +155,7 @@ body {
   border: none;
   outline: none;
   cursor: pointer;
+  -webkit-app-region: no-drag; /* Explicitly ensure no-drag */
 }
 
 .window-control.minimize:hover {

@@ -58,17 +58,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Initialize event listeners
   function initEventListeners() {
-    // Window control buttons
+    // Window control buttons for frameless window 
     document.getElementById('minimize-btn').addEventListener('click', () => {
       window.api.minimizeWindow();
     });
     
     document.getElementById('maximize-btn').addEventListener('click', () => {
       window.api.maximizeWindow();
+      // Update maximize button icon based on window state
+      updateMaximizeButtonState();
     });
     
     document.getElementById('close-btn').addEventListener('click', () => {
       window.api.closeWindow();
+    });
+    
+    // Register for alt-key-pressed messages from main process
+    window.api.onAltKeyPressed && window.api.onAltKeyPressed(() => {
+      // Handle Alt key press to toggle menu visibility
+      toggleFirstMenu();
     });
     
     // Tab control buttons
@@ -122,6 +130,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (activeTerminalId && terminals[activeTerminalId]) {
         terminals[activeTerminalId].fitAddon.fit();
       }
+      updateMaximizeButtonState();
     });
     
     // Keyboard shortcuts
@@ -129,6 +138,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Terminal events from main process
     initTerminalEvents();
+  }
+
+  // Update maximize button icon based on window state
+  function updateMaximizeButtonState() {
+    // We'll use a message to main process to get the current state
+    // For now, just update the button title
+    const maximizeButton = document.getElementById('maximize-btn');
+    if (maximizeButton) {
+      // We don't have direct access to window state, this would need IPC
+      // This is a placeholder - we would ideally get state from main process
+      maximizeButton.title = "Toggle Maximize"; 
+    }
+  }
+  
+  // Toggle the first menu in response to Alt key
+  function toggleFirstMenu() {
+    const firstMenuItem = document.querySelector('.menu-item');
+    if (firstMenuItem && firstMenuItem.dataset.menu) {
+      if (menuVisible) {
+        hideAllMenus();
+      } else {
+        toggleMenu(firstMenuItem.dataset.menu);
+      }
+    }
   }
 
   // Initialize menu actions
