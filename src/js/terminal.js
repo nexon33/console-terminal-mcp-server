@@ -11,11 +11,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   let submenuVisible = false;
   let selectedSubmenu = null;
   let currentFontSize = 14;
+  let currentTheme = 'dark';
   
   // Terminal themes
   const themes = {
     dark: {
-      background: '#1e1e1e',
+      background: '#1a1a1a',
       foreground: '#f0f0f0',
       black: '#000000',
       red: '#e74c3c',
@@ -32,7 +33,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       brightBlue: '#3498db',
       brightMagenta: '#9b59b6',
       brightCyan: '#1abc9c',
-      brightWhite: '#ffffff'
+      brightWhite: '#ffffff',
+      selectionBackground: 'rgba(255, 255, 255, 0.3)',
+      cursor: '#f0f0f0'
     },
     light: {
       background: '#ffffff',
@@ -52,7 +55,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       brightBlue: '#3498db',
       brightMagenta: '#9b59b6',
       brightCyan: '#1abc9c',
-      brightWhite: '#ecf0f1'
+      brightWhite: '#ecf0f1',
+      selectionBackground: 'rgba(0, 0, 0, 0.15)',
+      cursor: '#333333'
     }
   };
   
@@ -757,26 +762,51 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Toggle theme
   function toggleTheme() {
-    const currentTheme = document.documentElement.className;
-    const newTheme = currentTheme === 'theme-dark' ? 'theme-light' : 'theme-dark';
+    currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    const newTheme = currentTheme === 'dark' ? 'theme-dark' : 'theme-light';
     
-    document.documentElement.className = newTheme;
+    // Add transition class to body for smooth theme change
+    document.body.classList.add('theme-transition');
     
-    // Update terminal themes
-    const themeKey = newTheme === 'theme-dark' ? 'dark' : 'light';
-    Object.values(terminals).forEach(terminal => {
-      terminal.term.options.theme = themes[themeKey];
-    });
+    // Change theme with delay for transition
+    setTimeout(() => {
+      document.documentElement.className = newTheme;
+      
+      // Update terminal themes
+      Object.values(terminals).forEach(terminal => {
+        terminal.term.options.theme = themes[currentTheme];
+        terminal.term.refresh(0, terminal.term.rows - 1);
+      });
+      
+      // Remove transition class after theme change is complete
+      setTimeout(() => {
+        document.body.classList.remove('theme-transition');
+      }, 300);
+    }, 50);
+    
+    // Show feedback
+    showFeedback(`Theme changed to ${currentTheme}`, 'info');
   }
   
   // Change font size
   function changeFontSize(delta) {
+    const prevSize = currentFontSize;
     currentFontSize = Math.max(8, Math.min(24, currentFontSize + delta));
+    
+    // Only proceed if size actually changed
+    if (prevSize === currentFontSize) return;
     
     Object.values(terminals).forEach(terminal => {
       terminal.term.options.fontSize = currentFontSize;
       terminal.fitAddon.fit();
     });
+    
+    // Show feedback
+    if (delta > 0) {
+      showFeedback(`Font size increased to ${currentFontSize}px`, 'info');
+    } else {
+      showFeedback(`Font size decreased to ${currentFontSize}px`, 'info');
+    }
   }
   
   // Toggle menu bar
@@ -787,39 +817,78 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
   
+  // Show feedback message
+  function showFeedback(message, type = 'success') {
+    const feedbackElement = document.createElement('div');
+    feedbackElement.textContent = message;
+    feedbackElement.style.position = 'absolute';
+    feedbackElement.style.left = '50%';
+    feedbackElement.style.top = '50%';
+    feedbackElement.style.transform = 'translate(-50%, -50%)';
+    feedbackElement.style.padding = '12px 24px';
+    feedbackElement.style.borderRadius = '6px';
+    feedbackElement.style.zIndex = '1000';
+    feedbackElement.style.display = 'flex';
+    feedbackElement.style.alignItems = 'center';
+    feedbackElement.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.2)';
+    feedbackElement.style.animation = 'success-feedback 2s forwards';
+    
+    // Add icon based on type
+    const icon = document.createElement('span');
+    icon.style.marginRight = '10px';
+    icon.style.fontSize = '18px';
+    
+    if (type === 'success') {
+      feedbackElement.style.backgroundColor = 'rgba(46, 204, 113, 0.9)';
+      feedbackElement.style.color = 'white';
+      icon.textContent = '✓';
+    } else if (type === 'error') {
+      feedbackElement.style.backgroundColor = 'rgba(231, 76, 60, 0.9)';
+      feedbackElement.style.color = 'white';
+      icon.textContent = '✕';
+    } else if (type === 'info') {
+      feedbackElement.style.backgroundColor = 'rgba(52, 152, 219, 0.9)';
+      feedbackElement.style.color = 'white';
+      icon.textContent = 'ℹ';
+    }
+    
+    feedbackElement.prepend(icon);
+    document.body.appendChild(feedbackElement);
+    
+    // Remove after animation completes
+    setTimeout(() => {
+      if (feedbackElement.parentNode) {
+        feedbackElement.parentNode.removeChild(feedbackElement);
+      }
+    }, 2000);
+  }
+  
   // Create a new terminal tab
   function createNewTerminal() {
+    // Add loading indicator to tab bar
+    const tabsContainer = document.getElementById('tabs');
+    const loadingTab = document.createElement('div');
+    loadingTab.className = 'tab';
+    loadingTab.innerHTML = `
+      <span class="tab-title">Loading...</span>
+      <div class="loading-spinner"></div>
+    `;
+    const newTabButton = document.getElementById('new-tab-button');
+    tabsContainer.insertBefore(loadingTab, newTabButton);
+    
     // Request a new terminal from the main process
     window.api.createTerminal().then(sessionIdOrError => {
+      // Remove loading indicator
+      if (loadingTab.parentNode) {
+        loadingTab.parentNode.removeChild(loadingTab);
+      }
+      
       // Check if we got an error object back
       if (sessionIdOrError && typeof sessionIdOrError === 'object' && sessionIdOrError.error) {
         console.error('Error creating terminal:', sessionIdOrError.message);
         
         // Show error message to user
-        const errorMsg = document.createElement('div');
-        errorMsg.style.position = 'fixed';
-        errorMsg.style.top = '50%';
-        errorMsg.style.left = '50%';
-        errorMsg.style.transform = 'translate(-50%, -50%)';
-        errorMsg.style.backgroundColor = 'rgba(200, 0, 0, 0.8)';
-        errorMsg.style.color = 'white';
-        errorMsg.style.padding = '15px 20px';
-        errorMsg.style.borderRadius = '5px';
-        errorMsg.style.zIndex = '1000';
-        errorMsg.textContent = `Terminal error: ${sessionIdOrError.message || 'Failed to create terminal process'}`;
-        
-        document.body.appendChild(errorMsg);
-        
-        // Remove after 3 seconds
-        setTimeout(() => {
-          errorMsg.style.opacity = '0';
-          errorMsg.style.transition = 'opacity 0.5s';
-          setTimeout(() => {
-            if (errorMsg.parentNode) {
-              errorMsg.parentNode.removeChild(errorMsg);
-            }
-          }, 500);
-        }, 3000);
+        showFeedback(`Terminal error: ${sessionIdOrError.message || 'Failed to create terminal process'}`, 'error');
         
         // Try to reuse existing terminal if available
         if (activeTerminalId && terminals[activeTerminalId]) {
@@ -847,6 +916,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       createTerminalForSession(sessionIdOrError);
     }).catch(err => {
       console.error('Error creating terminal:', err);
+      // Remove loading indicator on error
+      if (loadingTab.parentNode) {
+        loadingTab.parentNode.removeChild(loadingTab);
+      }
+      showFeedback('Failed to create terminal', 'error');
     });
   }
   
@@ -863,15 +937,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Create the xterm.js instance
     const term = new Terminal({
-      fontFamily: 'Consolas, monospace',
+      fontFamily: 'Consolas, "Cascadia Mono", "Source Code Pro", monospace',
       fontSize: currentFontSize,
       cursorStyle: 'block',
       cursorBlink: true,
-      theme: themes.dark,
-      scrollback: 1000,
+      theme: themes[currentTheme],
+      scrollback: 5000,
       allowTransparency: true,
       convertEol: true,
-      disableStdin: false
+      disableStdin: false,
+      smoothScrollDuration: 300,
+      rightClickSelectsWord: true,
+      macOptionIsMeta: true,
+      rendererType: 'canvas',
+      allowProposedApi: true
     });
     
     // Create addons
@@ -918,6 +997,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
     
+    // Add custom title detection
+    term.onTitleChange(title => {
+      if (title && title.trim()) {
+        updateTabTitle(sessionId, title.trim());
+      }
+    });
+    
     // Create a tab for this terminal
     createTab(sessionId);
     
@@ -953,8 +1039,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       <span class="tab-close">×</span>
     `;
     
+    // Add appear animation
+    tab.style.opacity = '0';
+    tab.style.transform = 'translateY(-10px)';
+    tab.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+    
     // Insert before the new tab button
     tabsContainer.insertBefore(tab, newTabButton);
+    
+    // Trigger animation
+    setTimeout(() => {
+      tab.style.opacity = '1';
+      tab.style.transform = 'translateY(0)';
+    }, 10);
     
     // Add click events
     tab.addEventListener('click', (e) => {
@@ -962,6 +1059,47 @@ document.addEventListener('DOMContentLoaded', async () => {
         closeTerminal(sessionId);
       } else {
         setActiveTerminal(sessionId);
+      }
+    });
+    
+    // Add double-click for renaming
+    tab.querySelector('.tab-title').addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      const titleElement = e.target;
+      const currentTitle = titleElement.textContent;
+      
+      // Create input element for renaming
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = currentTitle;
+      input.className = 'tab-rename-input';
+      input.style.width = `${titleElement.offsetWidth}px`;
+      
+      // Replace title with input
+      titleElement.innerHTML = '';
+      titleElement.appendChild(input);
+      input.focus();
+      input.select();
+      
+      // Handle input events
+      input.addEventListener('blur', () => {
+        finishRenaming();
+      });
+      
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          finishRenaming();
+        } else if (e.key === 'Escape') {
+          input.value = currentTitle;
+          finishRenaming();
+        }
+      });
+      
+      // Function to complete renaming
+      function finishRenaming() {
+        const newTitle = input.value.trim() || currentTitle;
+        titleElement.textContent = newTitle;
+        updateTabTitle(sessionId, newTitle);
       }
     });
     
@@ -984,40 +1122,69 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
   
-  // Set the active terminal
+  // Set the active terminal with animation
   function setActiveTerminal(sessionId) {
     if (!terminals[sessionId]) return;
     
-    // Deactivate current terminal
+    // Deactivate current terminal with fade out
     if (activeTerminalId && terminals[activeTerminalId]) {
-      terminals[activeTerminalId].container.classList.remove('active');
+      terminals[activeTerminalId].container.classList.add('fade-out');
       
-      const currentTab = document.getElementById(`tab-${activeTerminalId}`);
-      if (currentTab) {
-        currentTab.classList.remove('active');
+      // Prepare for fade-in
+      terminals[sessionId].container.classList.add('fade-in');
+      
+      setTimeout(() => {
+        terminals[activeTerminalId].container.classList.remove('active', 'fade-out');
+        
+        const currentTab = document.getElementById(`tab-${activeTerminalId}`);
+        if (currentTab) {
+          currentTab.classList.remove('active');
+        }
+        
+        // Complete activation with fade-in
+        activeTerminalId = sessionId;
+        terminals[sessionId].container.classList.add('active');
+        terminals[sessionId].container.classList.remove('fade-in');
+        
+        const tab = document.getElementById(`tab-${sessionId}`);
+        if (tab) {
+          tab.classList.add('active');
+          
+          // Ensure the tab is visible by scrolling if necessary
+          tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+        }
+        
+        // Update status bar
+        updateTerminalInfo(sessionId);
+        
+        // Focus the terminal
+        terminals[sessionId].term.focus();
+        
+        // Fit the terminal
+        terminals[sessionId].fitAddon.fit();
+      }, 150);
+    } else {
+      // No previous active terminal, just activate
+      activeTerminalId = sessionId;
+      terminals[sessionId].container.classList.add('active');
+      
+      const tab = document.getElementById(`tab-${sessionId}`);
+      if (tab) {
+        tab.classList.add('active');
+        
+        // Ensure the tab is visible by scrolling if necessary
+        tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
       }
-    }
-    
-    // Activate new terminal
-    activeTerminalId = sessionId;
-    terminals[sessionId].container.classList.add('active');
-    
-    const tab = document.getElementById(`tab-${sessionId}`);
-    if (tab) {
-      tab.classList.add('active');
       
-      // Ensure the tab is visible by scrolling if necessary
-      tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+      // Update status bar
+      updateTerminalInfo(sessionId);
+      
+      // Focus the terminal
+      terminals[sessionId].term.focus();
+      
+      // Fit the terminal
+      terminals[sessionId].fitAddon.fit();
     }
-    
-    // Update status bar
-    updateTerminalInfo(sessionId);
-    
-    // Focus the terminal
-    terminals[sessionId].term.focus();
-    
-    // Fit the terminal
-    terminals[sessionId].fitAddon.fit();
   }
   
   // Update terminal information in the status bar
@@ -1034,6 +1201,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   function closeTerminal(sessionId) {
     if (!terminals[sessionId]) return;
     
+    // Add close animation to the tab
+    const tab = document.getElementById(`tab-${sessionId}`);
+    if (tab) {
+      tab.classList.add('closing');
+      
+      // Wait for animation to complete
+      setTimeout(() => {
+        // Continue with normal close logic
+        closeTerminalInternal(sessionId);
+      }, 200);
+    } else {
+      // No tab found, just close directly
+      closeTerminalInternal(sessionId);
+    }
+  }
+  
+  // Internal function to handle terminal closing logic
+  function closeTerminalInternal(sessionId) {
     try {
       // Safety check - ensure we have at least one terminal left or create a new one
       const terminalIds = Object.keys(terminals);
@@ -1263,33 +1448,64 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.api.sendCurrentOutput(activeTerminalId, output);
     
     // Visual feedback
-    const feedbackElement = document.createElement('div');
-    feedbackElement.textContent = '✓ Output sent';
-    feedbackElement.style.position = 'absolute';
-    feedbackElement.style.left = '50%';
-    feedbackElement.style.top = '50%';
-    feedbackElement.style.transform = 'translate(-50%, -50%)';
-    feedbackElement.style.backgroundColor = 'rgba(0, 128, 0, 0.8)';
-    feedbackElement.style.color = 'white';
-    feedbackElement.style.padding = '10px 20px';
-    feedbackElement.style.borderRadius = '5px';
-    feedbackElement.style.zIndex = '1000';
-    document.body.appendChild(feedbackElement);
-    
-    // Remove after a delay
-    setTimeout(() => {
-      feedbackElement.style.opacity = '0';
-      feedbackElement.style.transition = 'opacity 0.5s';
-      setTimeout(() => {
-        document.body.removeChild(feedbackElement);
-      }, 500);
-    }, 1500);
+    showFeedback('Output sent successfully', 'success');
   }
   
   // Initialize the application
   function init() {
     // Set up event listeners
     initEventListeners();
+    
+    // Add CSS for new animations
+    const style = document.createElement('style');
+    style.textContent = `
+      .theme-transition {
+        transition: background-color 0.3s ease, color 0.3s ease;
+      }
+      
+      .fade-out {
+        opacity: 0 !important;
+        transition: opacity 0.15s ease-out;
+      }
+      
+      .fade-in {
+        opacity: 0;
+        transition: opacity 0.15s ease-in;
+      }
+      
+      .tab.closing {
+        opacity: 0;
+        transform: scale(0.9);
+        transition: opacity 0.2s ease, transform 0.2s ease;
+      }
+      
+      .loading-spinner {
+        width: 14px;
+        height: 14px;
+        border: 2px solid transparent;
+        border-top-color: var(--foreground);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-left: 8px;
+      }
+      
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      
+      .tab-rename-input {
+        background: transparent;
+        border: none;
+        border-bottom: 1px solid var(--accent-color);
+        color: var(--foreground);
+        outline: none;
+        padding: 2px 0;
+        font-size: 13px;
+        font-family: var(--font-primary);
+      }
+    `;
+    document.head.appendChild(style);
     
     // Create initial terminal
     createNewTerminal();
