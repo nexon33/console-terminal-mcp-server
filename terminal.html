@@ -139,7 +139,9 @@
     <!-- Status Bar -->
     <div class="status-bar">
       <div class="status-items-left">
-        <div id="session-id" class="status-item">Session ID: Connecting...</div>
+        <div id="session-id" class="status-item">
+          Session ID: <span id="session-id-value" class="copyable">Connecting...</span>
+        </div>
       </div>
       <div class="status-items-right">
         <div id="terminal-size" class="status-item">80×24</div>
@@ -204,6 +206,19 @@
       <div class="dropdown-separator"></div>
       <div class="dropdown-item" id="menu-send-output">
         <span class="menu-text">Send Output Now</span>
+      </div>
+      <div class="dropdown-separator"></div>
+      <div class="dropdown-item" id="menu-copy-session-id">
+        <span class="menu-icon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M9 15L3 9L9 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M15 3H21V9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M21 15V21H15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M3 15V21H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="menu-text">Copy Session ID</span>
+        <span class="menu-shortcut">Ctrl+Alt+C</span>
       </div>
       <div class="dropdown-separator"></div>
       <div class="dropdown-item" id="menu-next-tab">

@@ -219,6 +219,23 @@ document.addEventListener('DOMContentLoaded', async () => {
       sendCurrentOutput();
     });
     
+    document.getElementById('menu-copy-session-id')?.addEventListener('click', () => {
+      hideAllMenus();
+      if (activeTerminalId) {
+        copyToClipboard(activeTerminalId);
+        showFeedback('Session ID copied to clipboard', 'success');
+        
+        // Also provide visual feedback on the element
+        const sessionIdElement = document.getElementById('session-id-value');
+        if (sessionIdElement) {
+          sessionIdElement.classList.add('copied');
+          setTimeout(() => {
+            sessionIdElement.classList.remove('copied');
+          }, 1500);
+        }
+      }
+    });
+    
     document.getElementById('menu-next-tab')?.addEventListener('click', () => {
       hideAllMenus();
       navigateToNextTab();
@@ -348,6 +365,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         navigateToPreviousTab();
       }
       
+      // Ctrl+Alt+C (Copy Session ID)
+      else if (e.ctrlKey && e.altKey && e.key === 'c') {
+        e.preventDefault();
+        if (activeTerminalId) {
+          copyToClipboard(activeTerminalId);
+          showFeedback('Session ID copied to clipboard', 'success');
+          
+          // Also provide visual feedback on the element
+          const sessionIdElement = document.getElementById('session-id-value');
+          if (sessionIdElement) {
+            sessionIdElement.classList.add('copied');
+            setTimeout(() => {
+              sessionIdElement.classList.remove('copied');
+            }, 1500);
+          }
+        }
+      }
+      
       // Ctrl+C (Copy)
       else if (e.ctrlKey && e.key === 'c') {
         if (activeTerminalId && terminals[activeTerminalId] && terminals[activeTerminalId].term.hasSelection()) {
@@ -467,6 +502,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       // Set this as the active terminal
       setActiveTerminal(sessionId);
+      
+      // Update session ID in the UI
+      const sessionIdElement = document.getElementById('session-id-value');
+      if (sessionIdElement) {
+        sessionIdElement.textContent = sessionId;
+      }
     });
     
     // Terminal close response event
@@ -1190,11 +1231,80 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Update terminal information in the status bar
   function updateTerminalInfo(sessionId) {
     if (sessionId === activeTerminalId) {
-      document.getElementById('session-id').textContent = `Session ID: ${sessionId}`;
+      const sessionIdElement = document.getElementById('session-id-value');
+      if (sessionIdElement) {
+        sessionIdElement.textContent = sessionId;
+        
+        // Ensure click handler is set up
+        if (!sessionIdElement.hasAttribute('data-copy-initialized')) {
+          sessionIdElement.setAttribute('data-copy-initialized', 'true');
+          
+          // Add click handler to copy session ID
+          sessionIdElement.addEventListener('click', () => {
+            copyToClipboard(sessionId);
+            
+            // Visual feedback
+            sessionIdElement.classList.add('copied');
+            setTimeout(() => {
+              sessionIdElement.classList.remove('copied');
+            }, 1500);
+            
+            // Show additional feedback
+            showFeedback('Session ID copied to clipboard', 'success');
+          });
+        }
+      }
       
       const { cols, rows } = terminals[sessionId].term;
       document.getElementById('terminal-size').textContent = `${cols}×${rows}`;
     }
+  }
+  
+  // Helper function to copy text to clipboard
+  function copyToClipboard(text) {
+    // Use the newer navigator.clipboard API if available
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(() => {
+          console.log('Session ID copied to clipboard');
+        })
+        .catch(err => {
+          console.error('Failed to copy session ID: ', err);
+          // Fallback to the older method
+          copyToClipboardFallback(text);
+        });
+    } else {
+      // Fallback for browsers that don't support the Clipboard API
+      copyToClipboardFallback(text);
+    }
+  }
+  
+  // Fallback clipboard copy method
+  function copyToClipboardFallback(text) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    
+    // Make the textarea out of viewport
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    textArea.style.top = '-999999px';
+    document.body.appendChild(textArea);
+    
+    textArea.focus();
+    textArea.select();
+    
+    try {
+      const successful = document.execCommand('copy');
+      if (successful) {
+        console.log('Session ID copied to clipboard (fallback)');
+      } else {
+        console.error('Failed to copy session ID (fallback)');
+      }
+    } catch (err) {
+      console.error('Failed to copy session ID (fallback): ', err);
+    }
+    
+    document.body.removeChild(textArea);
   }
   
   // Close a terminal

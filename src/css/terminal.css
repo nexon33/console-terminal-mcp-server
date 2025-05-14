@@ -477,6 +477,49 @@ body {
   margin-right: 6px;
 }
 
+.copyable {
+  cursor: pointer;
+  position: relative;
+  border-radius: 4px;
+  padding: 2px 6px;
+  transition: background-color var(--transition-speed) ease;
+}
+
+.copyable:hover {
+  background-color: var(--action-hover);
+}
+
+.copyable:active {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.copyable::after {
+  content: 'Copy';
+  position: absolute;
+  right: -8px;
+  top: -22px;
+  font-size: 10px;
+  background-color: var(--dropdown-bg);
+  color: var(--foreground);
+  padding: 2px 6px;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity var(--transition-speed) ease;
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.copyable:hover::after {
+  opacity: 1;
+}
+
+.copyable.copied::after {
+  content: 'Copied!';
+  background-color: var(--accent-color);
+  color: white;
+}
+
 .status-items-right .status-item {
   margin-right: 0;
   margin-left: 18px;
