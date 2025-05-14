@@ -132,19 +132,18 @@ function createOrShowMainWindow() {
     },
     backgroundColor: '#1e1e1e',
     show: false,
-    autoHideMenuBar: true, // Hide the default menu bar
-    frame: true // Keep frame for draggable window
+    autoHideMenuBar: false, // Changed to false since we'll handle this differently
+    frame: false, // Use frameless window
+    titleBarStyle: 'hidden', // Hide the title bar
+    titleBarOverlay: false  // Disable title bar overlay
   });
+  
+  // Completely remove menu bar
+  mainWindow.removeMenu();
   
   // Windows-specific handling for menu bar
   if (process.platform === 'win32') {
-    // Explicitly set menu visibility to false (Windows-specific fix)
-    mainWindow.setMenuBarVisibility(false);
-    
-    // Add event listener to prevent menu bar from showing when Alt key is pressed
-    mainWindow.on('focus', () => {
-      mainWindow.setMenuBarVisibility(false);
-    });
+    // No need for setMenuBarVisibility with frameless window
     
     // Intercept keyboard shortcuts that might show the menu bar
     mainWindow.webContents.on('before-input-event', (event, input) => {
