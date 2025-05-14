@@ -1,8 +1,10 @@
 # Electron Terminal MCP Server
 
-## 1. Description
-
 In an ideal world vendors would provide their own MCP integration for the terminal, but in the meantime this project provides a Model Context Protocol (MCP) server that allows clients to interact with a system terminal running within an Electron application. It enables executing commands, managing terminal sessions, and retrieving output programmatically.
+
+<a href="https://glama.ai/mcp/servers/@nexon33/console-terminal-mcp-server">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@nexon33/console-terminal-mcp-server/badge" alt="Electron Terminal Server MCP server" />
+</a>
 
 The system consists of two main parts:
 
