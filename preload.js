@@ -3,7 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 // Expose API to the renderer process
 contextBridge.exposeInMainWorld('api', {
-  // Terminal control
+  // Terminal management
   createTerminal: () => {
     return ipcRenderer.invoke('terminal:create');
   },
@@ -20,15 +20,10 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.send('terminal-send-current-output', { sessionId, output });
   },
   
-  // Settings
-  getSettings: () => {
-    return ipcRenderer.invoke('settings:get');
+  // Window management
+  createWindow: () => {
+    ipcRenderer.send('window:new');
   },
-  setSettings: (settings) => {
-    ipcRenderer.send('settings:set', settings);
-  },
-  
-  // Window control
   closeWindow: () => {
     ipcRenderer.send('window:close');
   },
@@ -40,6 +35,30 @@ contextBridge.exposeInMainWorld('api', {
   },
   toggleFullscreen: () => {
     ipcRenderer.send('window:toggle-fullscreen');
+  },
+  
+  // Developer tools
+  toggleDevTools: () => {
+    ipcRenderer.send('dev:toggle-tools');
+  },
+  reloadWindow: () => {
+    ipcRenderer.send('dev:reload');
+  },
+  forceReload: () => {
+    ipcRenderer.send('dev:force-reload');
+  },
+  
+  // App control
+  quit: () => {
+    ipcRenderer.send('app:quit');
+  },
+  
+  // Settings
+  getSettings: () => {
+    return ipcRenderer.invoke('settings:get');
+  },
+  setSettings: (settings) => {
+    ipcRenderer.send('settings:set', settings);
   },
   
   // Events from main process
