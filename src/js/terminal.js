@@ -78,6 +78,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       window.api.closeWindow();
     });
     
+    // Search button in top bar
+    document.getElementById('search-btn')?.addEventListener('click', () => {
+      showSearchPanel();
+    });
+    
     // Register for alt-key-pressed messages from main process
     window.api.onAltKeyPressed && window.api.onAltKeyPressed(() => {
       // Handle Alt key press to toggle menu visibility
@@ -1949,6 +1954,40 @@ document.addEventListener('DOMContentLoaded', async () => {
     // will use these global settings
   }
   
+  // Create search button in the top bar
+  function createSearchButton() {
+    // Check if the button already exists
+    if (document.getElementById('search-btn')) return;
+    
+    // Find the controls container in the header
+    const controlsContainer = document.querySelector('.window-controls') || document.querySelector('.header-controls');
+    
+    if (!controlsContainer) {
+      console.warn('Could not find header controls container to add search button');
+      return;
+    }
+    
+    // Create the search button
+    const searchBtn = document.createElement('div');
+    searchBtn.id = 'search-btn';
+    searchBtn.className = 'search-btn';
+    searchBtn.title = 'Search (Ctrl+F)';
+    searchBtn.innerHTML = `
+      <svg viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+    `;
+    
+    // Add click event
+    searchBtn.addEventListener('click', () => {
+      showSearchPanel();
+    });
+    
+    // Insert before the window control buttons
+    controlsContainer.insertBefore(searchBtn, controlsContainer.firstChild);
+  }
+  
   // Initialize the application
   function init() {
     // Set up event listeners
@@ -1959,6 +1998,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Load saved settings from localStorage if available
     loadSavedSettings();
+    
+    // Create search button if it doesn't exist
+    createSearchButton();
     
     // Add CSS for new animations
     const style = document.createElement('style');
@@ -2007,6 +2049,34 @@ document.addEventListener('DOMContentLoaded', async () => {
         padding: 2px 0;
         font-size: 13px;
         font-family: var(--font-primary);
+      }
+      
+      .search-btn {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 28px;
+        height: 28px;
+        margin-right: 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        color: var(--foreground);
+        background-color: transparent;
+        transition: background-color 0.2s;
+      }
+      
+      .search-btn:hover {
+        background-color: var(--hover-bg);
+      }
+      
+      .search-btn svg {
+        width: 16px;
+        height: 16px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
       }
     `;
     document.head.appendChild(style);
