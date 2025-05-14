@@ -1,4 +1,3 @@
-import logger from './logger.js';
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -12,6 +11,12 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { fileURLToPath } from 'url';
 import * as lockfile from 'lockfile'; // Changed import
+
+console.log = (...args) => logger.info(...args);
+console.error = (...args) => logger.error(...args);
+console.warn = (...args) => logger.warn(...args);
+console.info = (...args) => logger.info(...args);
+console.debug = (...args) => logger.debug(...args); // Winston's default level is 'info', so 'debug' won't show unless level is changed.
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

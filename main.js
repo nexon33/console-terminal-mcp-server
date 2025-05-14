@@ -5,7 +5,7 @@ import cors from 'cors';
 import bodyParser from 'body-parser';
 import path from 'path';
 import os from 'os';
-import { spawn as ptySpawn } from 'node-pty';
+import { spawn as ptySpawn } from './pty-wrapper.js';
 import { fileURLToPath } from 'url';
 import mcpServerSingleton from './mcp-server.js';
 
@@ -63,6 +63,22 @@ let mcpServer = null;
 app.whenReady().then(() => {
   logger.info('Electron app is ready');
 
+  // Handle ConPTY assertion errors in Windows
+  // This is a workaround for issues in node-pty with ConPTY on Windows
+  if (process.platform === 'win32') {
+    // Patch Windows specific errors that might crash the app
+    process.on('uncaughtException', (err) => {
+      if (err.message && err.message.includes('Assertion failed')) {
+        logger.error('Caught ConPTY assertion error:', err);
+        // Don't crash, continue running
+        return;
+      }
+      
+      // For other errors, log but don't crash
+      logger.error('Uncaught exception:', err);
+    });
+  }
+
   // Start the MCP server
   mcpServer = mcpServerSingleton.start();
   logger.info(`MCP Server started on port ${mcpServerSingleton.getPort()}`);
@@ -86,6 +102,9 @@ app.whenReady().then(() => {
   ]);
   tray.setToolTip('MCP Terminal');
   tray.setContextMenu(contextMenu);
+  
+  // Remove default menu
+  Menu.setApplicationMenu(null);
   
   // Create the main window
   createOrShowMainWindow();
@@ -112,7 +131,8 @@ function createOrShowMainWindow() {
       preload: path.join(__dirname, 'preload.js')
     },
     backgroundColor: '#1e1e1e',
-    show: false
+    show: false,
+    autoHideMenuBar: true // Hide the default menu bar
   });
   
   // Load the terminal UI
@@ -155,11 +175,25 @@ function createTerminalProcess(sessionId, command = null) {
       cols: 80,
       rows: 30,
       cwd: process.env.HOME || process.env.USERPROFILE,
-      env: process.env
+      env: process.env,
+      // Add ConPTY specific options to help avoid assertion errors
+      useConpty: true, // Force ConPTY use on Windows
+      conptyInheritCursor: false // Avoid cursor inheritance which can cause issues
     };
     
-    // Start the terminal process
-    const term = ptySpawn(shell, shellArgs, options);
+    // Start the terminal process with additional validation
+    let term;
+    try {
+      term = ptySpawn(shell, shellArgs, options);
+    } catch (ptyError) {
+      logger.error(`Error spawning PTY process for session ${sessionId}:`, ptyError);
+      
+      // Try fallback approach with different options
+      logger.info(`Attempting fallback PTY creation for session ${sessionId}`);
+      options.useConpty = false; // Try with winpty instead
+      options.windowsEnableConsoleTitleChange = false; // Disable title changes
+      term = ptySpawn(shell, shellArgs, options);
+    }
     
     // Create a session for this terminal
     terminals.set(sessionId, {
@@ -198,18 +232,22 @@ function createTerminalProcess(sessionId, command = null) {
       }
     });
     
-    // Handle terminal exit
+    // Handle terminal exit with additional error handling
     term.onExit(({ exitCode }) => {
-      const session = terminals.get(sessionId);
-      if (session) {
-        // Don't set status to 'completed' if the terminal exits
-        // Just record the exit code
-        session.exitCode = session.exitCode !== null ? session.exitCode : exitCode;
-        logger.info(`Terminal process exited for session ${sessionId} with code ${session.exitCode}`);
-      }
-      
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('terminal-exit', { sessionId, exitCode: session.exitCode });
+      try {
+        const session = terminals.get(sessionId);
+        if (session) {
+          // Don't set status to 'completed' if the terminal exits
+          // Just record the exit code
+          session.exitCode = session.exitCode !== null ? session.exitCode : exitCode;
+          logger.info(`Terminal process exited for session ${sessionId} with code ${session.exitCode}`);
+        }
+        
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('terminal-exit', { sessionId, exitCode: session ? session.exitCode : exitCode });
+        }
+      } catch (exitHandlerError) {
+        logger.error(`Error in terminal exit handler for session ${sessionId}:`, exitHandlerError);
       }
     });
     
@@ -217,14 +255,34 @@ function createTerminalProcess(sessionId, command = null) {
     if (command) {
       // Execute the command and get the exit code
       if (os.platform() === 'win32') {
-        // Define the __exitmark function at the start of the session
-        term.write("function __exitmark { $code = if ($LASTEXITCODE -ne $null) { $LASTEXITCODE } elseif ($?) { 0 } else { 1 }; echo __EXITCODE_MARK__:$code }\r");
-        term.write("clear\r");
-        term.write(`${command}\r`);
-        term.write("__exitmark\r");
+        try {
+          // Define the __exitmark function at the start of the session
+          term.write("function __exitmark { $code = if ($LASTEXITCODE -ne $null) { $LASTEXITCODE } elseif ($?) { 0 } else { 1 }; echo __EXITCODE_MARK__:$code }\r");
+          term.write("clear\r");
+          term.write(`${command}\r`);
+          term.write("__exitmark\r");
+        } catch (writeError) {
+          logger.error(`Error writing command to terminal for session ${sessionId}:`, writeError);
+          // If we can't write, mark the session as error
+          const session = terminals.get(sessionId);
+          if (session) {
+            session.status = 'error';
+            session.exitCode = 1;
+          }
+        }
       } else {
-        term.write(`${command}\r`);
-        term.write("echo __EXITCODE_MARK__:$?\r"); // Unix equivalent
+        try {
+          term.write(`${command}\r`);
+          term.write("echo __EXITCODE_MARK__:$?\r"); // Unix equivalent
+        } catch (writeError) {
+          logger.error(`Error writing command to terminal for session ${sessionId}:`, writeError);
+          // If we can't write, mark the session as error
+          const session = terminals.get(sessionId);
+          if (session) {
+            session.status = 'error';
+            session.exitCode = 1;
+          }
+        }
       }
     }
     
@@ -255,6 +313,79 @@ function cleanupAllTerminals() {
   }
   
   terminals.clear();
+}
+
+// Helper function to safely clean up a terminal session
+function cleanupTerminalSession(sessionId) {
+  if (!sessionId) {
+    logger.warn('Attempted to clean up session with undefined sessionId');
+    return false;
+  }
+  
+  try {
+    // Check if session exists
+    if (!terminals.has(sessionId)) {
+      logger.warn(`Attempted to clean up non-existent session: ${sessionId}`);
+      return false;
+    }
+    
+    const session = terminals.get(sessionId);
+    
+    // Kill the process if it exists
+    if (session.process) {
+      try {
+        session.process.kill();
+      } catch (processError) {
+        logger.error(`Error killing process for session ${sessionId}:`, processError);
+        // Continue with cleanup despite process kill error
+      }
+      
+      session.status = 'terminated';
+      session.exitCode = EXIT_CODES.MANUAL_TERMINATION;
+    }
+    
+    // Clean up any pending completion signals
+    if (pendingCompletionSignals.has(sessionId)) {
+      try {
+        // Resolve with terminated status if there's a pending promise
+        const { resolve } = pendingCompletionSignals.get(sessionId);
+        resolve({
+          sessionId: session.sessionId,
+          command: session.command,
+          output: session.buffer, 
+          status: 'terminated',
+          startTime: session.startTime,
+          exitCode: EXIT_CODES.MANUAL_TERMINATION,
+          lastUnblockedOutput: session.lastUnblockedOutput,
+          lastUnblockedOutputTimestamp: session.lastUnblockedOutputTimestamp
+        });
+      } catch (signalError) {
+        logger.error(`Error resolving pending signals for session ${sessionId}:`, signalError);
+      }
+      pendingCompletionSignals.delete(sessionId);
+    }
+    
+    // Remove from terminals map
+    terminals.delete(sessionId);
+    logger.info(`Successfully cleaned up terminal session: ${sessionId}`);
+    return true;
+  } catch (error) {
+    logger.error(`Error cleaning up terminal session ${sessionId}:`, error);
+    
+    // Attempt forced cleanup in case of error
+    try {
+      if (terminals.has(sessionId)) {
+        terminals.delete(sessionId);
+      }
+      if (pendingCompletionSignals.has(sessionId)) {
+        pendingCompletionSignals.delete(sessionId);
+      }
+    } catch (forcedCleanupError) {
+      logger.error(`Error during forced cleanup for session ${sessionId}:`, forcedCleanupError);
+    }
+    
+    return false;
+  }
 }
 
 // Helper function to wait for command completion
@@ -528,33 +659,71 @@ ipcMain.handle('terminal:create', async () => {
     return sessionId;
   } catch (error) {
     logger.error('Error creating terminal:', error);
-    throw error;
+    // Instead of throwing an error which would crash the IPC bridge,
+    // return an error object that the renderer can handle
+    return { error: true, message: error.message || 'Failed to create terminal', sessionId };
   }
 });
 
 // Handle terminal closure request from renderer
 ipcMain.on('terminal:close', (event, { sessionId }) => {
   try {
-    if (terminals.has(sessionId)) {
-      const session = terminals.get(sessionId);
-      if (session.process) {
-        session.process.kill();
-      }
-      terminals.delete(sessionId);
+    if (!sessionId) {
+      logger.warn('Attempted to close terminal with undefined sessionId');
+      event.reply('terminal:close-response', { 
+        sessionId, 
+        success: false, 
+        error: 'Invalid session ID'
+      });
+      return;
     }
+    
+    let success = false;
+    if (terminals.has(sessionId)) {
+      success = cleanupTerminalSession(sessionId);
+      logger.info(`Terminal session ${sessionId} closed by renderer request: ${success ? 'success' : 'failed'}`);
+    } else {
+      logger.warn(`Attempted to close non-existent terminal session: ${sessionId}`);
+      success = true; // Consider it a success if it doesn't exist (already closed)
+    }
+    
+    // Send response back to renderer
+    event.reply('terminal:close-response', { 
+      sessionId, 
+      success, 
+      error: success ? null : 'Failed to clean up terminal session'
+    });
   } catch (error) {
     logger.error(`Error closing terminal ${sessionId}:`, error);
+    // Send error response
+    event.reply('terminal:close-response', { 
+      sessionId, 
+      success: false, 
+      error: error.message || 'Unknown error closing terminal'
+    });
   }
 });
 
 // Handle terminal input from renderer
 ipcMain.on('pty-input', (event, { sessionId, data }) => {
   try {
+    if (!sessionId) {
+      logger.warn('Received terminal input with undefined sessionId');
+      return;
+    }
+    
     if (terminals.has(sessionId)) {
-      terminals.get(sessionId).process.write(data);
+      const session = terminals.get(sessionId);
+      if (session.process) {
+        session.process.write(data);
+      } else {
+        logger.warn(`Cannot write to null process for session ${sessionId}`);
+      }
+    } else {
+      logger.warn(`Attempted to write to non-existent terminal session: ${sessionId}`);
     }
   } catch (error) {
-    logger.error('Error handling terminal input:', error);
+    logger.error(`Error handling terminal input for session ${sessionId}:`, error);
   }
 });
 
@@ -564,6 +733,11 @@ ipcMain.on('terminal-send-current-output', (event, { sessionId, output }) => {
    logger.info(`Received unblocked output for session ${sessionId}. Output length: ${output.length}`);
  }
  try {
+   if (!sessionId) {
+     logger.warn('Received unblocked output with undefined sessionId');
+     return;
+   }
+   
    const session = terminals.get(sessionId);
    if (session) {
      session.lastUnblockedOutput = output;
@@ -598,18 +772,31 @@ ipcMain.on('terminal-send-current-output', (event, { sessionId, output }) => {
 // Terminal resize events
 ipcMain.on('terminal-resize', (event, { sessionId, cols, rows }) => {
   try {
+    if (!sessionId) {
+      logger.warn('Received terminal resize with undefined sessionId');
+      return;
+    }
+    
     if (terminals.has(sessionId)) {
       const session = terminals.get(sessionId);
       if (session.process) {
         session.process.resize(cols, rows);
+      } else {
+        logger.warn(`Cannot resize null process for session ${sessionId}`);
       }
+    } else {
+      logger.warn(`Attempted to resize non-existent terminal session: ${sessionId}`);
     }
   } catch (error) {
-    logger.error('Error handling terminal resize:', error);
+    logger.error(`Error handling terminal resize for session ${sessionId}:`, error);
   }
 });
 
-// Window control events
+// Window management events
+ipcMain.on('window:new', () => {
+  createOrShowMainWindow();
+});
+
 ipcMain.on('window:close', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (win) {
@@ -642,6 +829,37 @@ ipcMain.on('window:toggle-fullscreen', (event) => {
   }
 });
 
+// Developer tool events
+ipcMain.on('dev:toggle-tools', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) {
+    if (win.webContents.isDevToolsOpened()) {
+      win.webContents.closeDevTools();
+    } else {
+      win.webContents.openDevTools();
+    }
+  }
+});
+
+ipcMain.on('dev:reload', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) {
+    win.reload();
+  }
+});
+
+ipcMain.on('dev:force-reload', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) {
+    win.webContents.reloadIgnoringCache();
+  }
+});
+
+// Application control
+ipcMain.on('app:quit', () => {
+  app.quit();
+});
+
 // Prevent app from quitting when all windows are closed
 app.on('window-all-closed', (e) => {
   // Don't quit on all windows closed (macOS behavior)
@@ -668,4 +886,10 @@ app.on('before-quit', () => {
   if (mcpServer) {
     mcpServerSingleton.stop();
   }
+});
+
+// Global error handler to prevent crashes from terminal operations
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught exception in main process:', error);
+  // Don't exit - keep the app running despite the error
 });

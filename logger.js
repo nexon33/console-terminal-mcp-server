@@ -65,24 +65,5 @@ logger.stream = {
   },
 };
 
-// Store original console methods before overriding
-const originalConsole = {
-  log: console.log,
-  error: console.error,
-  warn: console.warn,
-  info: console.info,
-  debug: console.debug,
-};
-
-// Override console methods
-// We are redirecting console.x to logger.x.
-// If the logger itself uses console.x internally (e.g. the Console transport),
-// it should use the original console methods to avoid infinite loops.
-// Winston's Console transport is designed to handle this correctly.
-console.log = (...args) => logger.info(...args);
-console.error = (...args) => logger.error(...args);
-console.warn = (...args) => logger.warn(...args);
-console.info = (...args) => logger.info(...args);
-console.debug = (...args) => logger.debug(...args); // Winston's default level is 'info', so 'debug' won't show unless level is changed.
 
 export default logger;

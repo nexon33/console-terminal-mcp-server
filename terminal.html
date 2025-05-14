@@ -9,43 +9,39 @@
 </head>
 <body>
   <div class="app-container">
-    <!-- Unified Header Bar -->
-    <div class="unified-header">
-      <div class="app-icon">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M5 7H19V17H5V7Z" stroke="currentColor" stroke-width="2" />
-          <path d="M8 11L12 14L16 11" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-        </svg>
-      </div>
-      <div class="app-title">MCP Terminal</div>
+    <!-- Main Application Bar -->
+    <div class="app-menu-bar">
+      <!-- App Icon and Main Menu Items -->
+      <div class="app-menu-section">
+        <div class="app-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M5 7H19V17H5V7Z" stroke="currentColor" stroke-width="2" />
+            <path d="M8 11L12 14L16 11" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+        </div>
 
-      <!-- Menu Items (Optional) -->
-      <div class="menu-bar">
+        <!-- Main Menu Items -->
+        <div class="menu-item" data-menu="mcp">MCP Terminal</div>
         <div class="menu-item" data-menu="terminal">Terminal</div>
+        <div class="menu-item" data-menu="edit">Edit</div>
+        <div class="menu-item" data-menu="view">View</div>
+        <div class="menu-item" data-menu="window">Window</div>
         <div class="menu-item" data-menu="help">Help</div>
       </div>
 
-      <!-- Action Buttons -->
-      <div class="action-buttons">
-        <button id="new-tab-btn" class="action-button" title="New Terminal (Ctrl+Shift+N)">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-        </button>
-        <button id="clear-btn" class="action-button" title="Clear Terminal (Ctrl+K)">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Spacer to push window controls to right -->
+      <div class="flex-spacer"></div>
+
+      <!-- Tab Controls -->
+      <div class="tab-controls">
+        <button id="new-tab-btn" class="tab-control-button" title="New Tab">+</button>
+        <button id="trash-btn" class="tab-control-button" title="Close Current Tab">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M2 4H14M6 4V12M10 4V12M3 4L4 12H12L13 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
         </button>
-        <button id="send-output-btn" class="action-button" title="Send Current Output">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M1 8h14M8 1l7 7-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
+        <button id="next-tab-btn" class="tab-control-button" title="Next Tab">→</button>
       </div>
-
-      <!-- Header Spacer to push window controls to the right -->
-      <div class="header-spacer"></div>
 
       <!-- Window Controls -->
       <div class="window-controls">
@@ -81,7 +77,7 @@
     <!-- Status Bar -->
     <div class="status-bar">
       <div class="status-items-left">
-        <div id="terminal-info" class="status-item">Session ID: Connecting...</div>
+        <div id="session-id" class="status-item">Session ID: Connecting...</div>
       </div>
       <div class="status-items-right">
         <div id="terminal-size" class="status-item">80×24</div>
@@ -91,45 +87,135 @@
 
   <!-- Dropdown Menus -->
   <div id="dropdown-menus">
+    <!-- MCP Terminal Menu -->
+    <div id="mcp-menu" class="dropdown-menu" data-parent="mcp">
+      <div class="dropdown-item" id="menu-new-window">
+        <span class="menu-text">New Window</span>
+        <span class="menu-shortcut">Ctrl+Shift+N</span>
+      </div>
+      <div class="dropdown-separator"></div>
+      <div class="dropdown-item" id="menu-settings">
+        <span class="menu-text">Settings</span>
+      </div>
+      <div class="dropdown-separator"></div>
+      <div class="dropdown-item" id="menu-exit">
+        <span class="menu-text">Exit</span>
+        <span class="menu-shortcut">Alt+F4</span>
+      </div>
+    </div>
+    
     <!-- Terminal Menu -->
     <div id="terminal-menu" class="dropdown-menu" data-parent="terminal">
       <div class="dropdown-item" id="menu-new-tab">
-        <span class="menu-icon">+</span>
         <span class="menu-text">New Tab</span>
         <span class="menu-shortcut">Ctrl+Shift+T</span>
       </div>
+      <div class="dropdown-item" id="menu-close-tab">
+        <span class="menu-text">Close Tab</span>
+        <span class="menu-shortcut">Ctrl+W</span>
+      </div>
+      <div class="dropdown-separator"></div>
       <div class="dropdown-item" id="menu-clear">
-        <span class="menu-icon">🗑️</span>
         <span class="menu-text">Clear Terminal</span>
         <span class="menu-shortcut">Ctrl+K</span>
       </div>
+      <div class="dropdown-item" id="menu-reset">
+        <span class="menu-text">Reset Terminal</span>
+      </div>
       <div class="dropdown-separator"></div>
       <div class="dropdown-item" id="menu-send-output">
-        <span class="menu-icon">➤</span>
         <span class="menu-text">Send Output Now</span>
       </div>
       <div class="dropdown-separator"></div>
       <div class="dropdown-item" id="menu-next-tab">
-        <span class="menu-icon">▶</span>
         <span class="menu-text">Next Tab</span>
         <span class="menu-shortcut">Ctrl+Tab</span>
       </div>
       <div class="dropdown-item" id="menu-prev-tab">
-        <span class="menu-icon">◀</span>
         <span class="menu-text">Previous Tab</span>
         <span class="menu-shortcut">Ctrl+Shift+Tab</span>
+      </div>
+    </div>
+    
+    <!-- Edit Menu -->
+    <div id="edit-menu" class="dropdown-menu" data-parent="edit">
+      <div class="dropdown-item" id="menu-copy">
+        <span class="menu-text">Copy</span>
+        <span class="menu-shortcut">Ctrl+C</span>
+      </div>
+      <div class="dropdown-item" id="menu-paste">
+        <span class="menu-text">Paste</span>
+        <span class="menu-shortcut">Ctrl+V</span>
+      </div>
+      <div class="dropdown-separator"></div>
+      <div class="dropdown-item" id="menu-select-all">
+        <span class="menu-text">Select All</span>
+        <span class="menu-shortcut">Ctrl+A</span>
+      </div>
+      <div class="dropdown-item" id="menu-find">
+        <span class="menu-text">Find</span>
+        <span class="menu-shortcut">Ctrl+F</span>
+      </div>
+    </div>
+    
+    <!-- View Menu -->
+    <div id="view-menu" class="dropdown-menu" data-parent="view">
+      <div class="dropdown-item" id="menu-toggle-theme">
+        <span class="menu-text">Toggle Theme</span>
+      </div>
+      <div class="dropdown-separator"></div>
+      <div class="dropdown-item" id="menu-increase-font">
+        <span class="menu-text">Increase Font Size</span>
+        <span class="menu-shortcut">Ctrl++</span>
+      </div>
+      <div class="dropdown-item" id="menu-decrease-font">
+        <span class="menu-text">Decrease Font Size</span>
+        <span class="menu-shortcut">Ctrl+-</span>
+      </div>
+      <div class="dropdown-separator"></div>
+      <div class="dropdown-item" id="menu-toggle-menu-bar">
+        <span class="menu-text">Toggle Menu Bar</span>
+        <span class="menu-shortcut">Alt</span>
+      </div>
+    </div>
+    
+    <!-- Window Menu -->
+    <div id="window-menu" class="dropdown-menu" data-parent="window">
+      <div class="dropdown-item" id="menu-fullscreen">
+        <span class="menu-text">Toggle Fullscreen</span>
+        <span class="menu-shortcut">F11</span>
+      </div>
+      <div class="dropdown-separator"></div>
+      <div class="dropdown-item submenu-trigger" data-submenu="developer-tools">
+        <span class="menu-text">Developer Tools</span>
+        <span class="submenu-arrow">▶</span>
+      </div>
+    </div>
+    
+    <!-- Developer Tools Submenu -->
+    <div id="developer-tools-menu" class="dropdown-menu submenu" data-parent="developer-tools">
+      <div class="dropdown-item" id="menu-toggle-dev-tools">
+        <span class="menu-text">Toggle Developer Tools</span>
+        <span class="menu-shortcut">F12</span>
+      </div>
+      <div class="dropdown-item" id="menu-reload">
+        <span class="menu-text">Reload Window</span>
+        <span class="menu-shortcut">Ctrl+R</span>
+      </div>
+      <div class="dropdown-item" id="menu-force-reload">
+        <span class="menu-text">Force Reload</span>
+        <span class="menu-shortcut">Ctrl+Shift+R</span>
       </div>
     </div>
     
     <!-- Help Menu -->
     <div id="help-menu" class="dropdown-menu" data-parent="help">
       <div class="dropdown-item" id="menu-keyboard-shortcuts">
-        <span class="menu-icon">⌨️</span>
         <span class="menu-text">Keyboard Shortcuts</span>
       </div>
+      <div class="dropdown-separator"></div>
       <div class="dropdown-item" id="menu-about">
-        <span class="menu-icon">ℹ️</span>
-        <span class="menu-text">About</span>
+        <span class="menu-text">About MCP Terminal</span>
       </div>
     </div>
   </div>
@@ -137,26 +223,35 @@
   <!-- Context Menu -->
   <div id="context-menu" class="context-menu">
     <div class="context-menu-item" data-action="copy">
-      <span class="menu-icon">📋</span>
       <span class="menu-text">Copy</span>
     </div>
     <div class="context-menu-item" data-action="paste">
-      <span class="menu-icon">📋</span>
       <span class="menu-text">Paste</span>
     </div>
     <div class="context-menu-separator"></div>
     <div class="context-menu-item" data-action="clear">
-      <span class="menu-icon">🗑️</span>
       <span class="menu-text">Clear</span>
     </div>
     <div class="context-menu-item" data-action="send-output">
-      <span class="menu-icon">➤</span>
       <span class="menu-text">Send Output Now</span>
     </div>
     <div class="context-menu-separator"></div>
     <div class="context-menu-item" data-action="new-tab">
-      <span class="menu-icon">+</span>
       <span class="menu-text">New Tab</span>
+    </div>
+    <div class="context-menu-separator"></div>
+    <div class="context-menu-item" data-action="dev-tools">
+      <span class="menu-text">Inspect Element</span>
+    </div>
+  </div>
+
+  <!-- Search Panel -->
+  <div id="search-panel" class="search-panel">
+    <input type="text" id="search-input" placeholder="Find in terminal..." />
+    <div class="search-controls">
+      <button id="search-prev-btn" title="Previous match">◀</button>
+      <button id="search-next-btn" title="Next match">▶</button>
+      <button id="search-close-btn" title="Close">✕</button>
     </div>
   </div>
 

@@ -8,15 +8,19 @@ contextBridge.exposeInMainWorld('api', {
     return ipcRenderer.invoke('terminal:create');
   },
   sendTerminalInput: (sessionId, data) => {
+    if (!sessionId) return;
     ipcRenderer.send('pty-input', { sessionId, data });
   },
   resizeTerminal: (sessionId, cols, rows) => {
+    if (!sessionId) return;
     ipcRenderer.send('terminal-resize', { sessionId, cols, rows });
   },
   closeTerminal: (sessionId) => {
+    if (!sessionId) return;
     ipcRenderer.send('terminal:close', { sessionId });
   },
   sendCurrentOutput: (sessionId, output) => {
+    if (!sessionId) return;
     ipcRenderer.send('terminal-send-current-output', { sessionId, output });
   },
   
@@ -70,5 +74,8 @@ contextBridge.exposeInMainWorld('api', {
   },
   onSessionId: (callback) => {
     ipcRenderer.on('session-id', (event, sessionId) => callback(sessionId));
+  },
+  onTerminalCloseResponse: (callback) => {
+    ipcRenderer.on('terminal:close-response', (event, data) => callback(data));
   }
 });

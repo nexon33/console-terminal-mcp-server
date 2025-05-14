@@ -1,7 +1,7 @@
 /* Terminal CSS */
 :root {
-  --header-height: 38px;
-  --tabs-height: 36px;
+  --app-bar-height: 38px;
+  --tabs-height: 30px;
   --status-bar-height: 24px;
   --accent-color: #007acc;
   --background-dark: #1e1e1e;
@@ -63,133 +63,76 @@ body {
   height: 100vh;
 }
 
-/* Header Bar */
-.unified-header {
-  height: var(--header-height);
+/* App Menu Bar */
+.app-menu-bar {
+  height: var(--app-bar-height);
   background-color: var(--header-bg);
   display: flex;
   align-items: center;
-  padding: 0 10px;
+  padding: 0;
   -webkit-app-region: drag; /* Allow dragging from header */
   border-bottom: 1px solid var(--border-color);
-  z-index: 10;
+  z-index: 20;
+}
+
+.app-menu-section {
+  display: flex;
+  align-items: center;
+  height: 100%;
 }
 
 .app-icon {
-  margin-right: 8px;
+  margin: 0 8px;
   color: var(--foreground);
 }
 
-.app-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--foreground);
-}
-
-.header-spacer {
+.flex-spacer {
   flex-grow: 1;
 }
 
-/* Menu Bar */
-.menu-bar {
-  display: flex;
-  margin-left: 16px;
-  -webkit-app-region: no-drag; /* Allow menu clicks */
-}
-
+/* Menu Items */
 .menu-item {
-  padding: 0 10px;
   height: 100%;
+  padding: 0 10px;
   display: flex;
   align-items: center;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
+  -webkit-app-region: no-drag; /* Allow menu clicks */
 }
 
 .menu-item:hover {
   background-color: rgba(255, 255, 255, 0.1);
 }
 
-/* Menu Dropdowns */
-.dropdown-menu {
-  position: absolute;
-  background-color: var(--dropdown-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-  min-width: 200px;
-  z-index: 100;
-  display: none;
-  padding: 4px 0;
-}
-
-.dropdown-menu.show {
-  display: block;
-}
-
-.dropdown-item {
-  padding: 8px 12px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  font-size: 13px;
-}
-
-.dropdown-item:hover {
+.menu-item.active {
   background-color: var(--accent-color);
   color: white;
 }
 
-.dropdown-separator {
-  height: 1px;
-  background-color: var(--border-color);
-  margin: 4px 0;
-}
-
-.menu-icon {
-  margin-right: 8px;
-  font-size: 14px;
-  width: 16px;
-  text-align: center;
-}
-
-.menu-text {
-  flex-grow: 1;
-}
-
-.menu-shortcut {
-  margin-left: 16px;
-  font-size: 12px;
-  opacity: 0.7;
-}
-
-.action-buttons {
+/* Tab Controls */
+.tab-controls {
   display: flex;
-  margin-right: 16px;
+  align-items: center;
+  height: 100%;
   -webkit-app-region: no-drag; /* Allow button clicks */
 }
 
-.action-button {
+.tab-control-button {
   background: transparent;
   border: none;
   color: var(--foreground);
   width: 28px;
   height: 28px;
-  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-left: 4px;
   cursor: pointer;
   outline: none;
 }
 
-.action-button:hover {
+.tab-control-button:hover {
   background-color: rgba(255, 255, 255, 0.1);
-}
-
-.action-button:active {
-  background-color: rgba(255, 255, 255, 0.2);
 }
 
 /* Window Controls */
@@ -199,8 +142,8 @@ body {
 }
 
 .window-control {
-  width: 28px;
-  height: 28px;
+  width: 46px;
+  height: var(--app-bar-height);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -226,6 +169,66 @@ body {
   stroke: white;
 }
 
+/* Menu Dropdowns */
+.dropdown-menu {
+  position: absolute;
+  top: var(--app-bar-height);
+  background-color: var(--dropdown-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 0 0 4px 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  min-width: 200px;
+  z-index: 100;
+  display: none;
+  padding: 4px 0;
+}
+
+.dropdown-menu.show {
+  display: block;
+}
+
+.dropdown-item {
+  padding: 6px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  position: relative;
+}
+
+.dropdown-item:hover {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.dropdown-separator {
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 4px 0;
+}
+
+.menu-text {
+  flex-grow: 1;
+}
+
+.menu-shortcut {
+  margin-left: 16px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.submenu-arrow {
+  font-size: 10px;
+  margin-left: 8px;
+}
+
+/* Submenu positioning */
+.submenu {
+  left: 100% !important;
+  top: 0 !important;
+  border-radius: 0 4px 4px 0;
+}
+
 /* Tabs Bar */
 .tabs {
   display: flex;
@@ -235,6 +238,7 @@ body {
   overflow-x: auto;
   white-space: nowrap;
   scrollbar-width: none; /* Firefox */
+  z-index: 10;
 }
 
 .tabs::-webkit-scrollbar {
@@ -283,7 +287,7 @@ body {
 }
 
 .new-tab-button {
-  width: 36px;
+  width: 30px;
   height: 100%;
   background: transparent;
   border: none;
@@ -369,7 +373,7 @@ body {
 }
 
 .context-menu-item {
-  padding: 8px 12px;
+  padding: 6px 12px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -385,6 +389,59 @@ body {
   height: 1px;
   background-color: var(--border-color);
   margin: 4px 0;
+}
+
+/* Search Panel */
+.search-panel {
+  position: absolute;
+  top: var(--app-bar-height);
+  right: 20px;
+  z-index: 50;
+  background-color: var(--dropdown-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  display: none;
+  flex-direction: row;
+  align-items: center;
+  padding: 6px;
+}
+
+.search-panel.show {
+  display: flex;
+}
+
+#search-input {
+  background-color: var(--background);
+  color: var(--foreground);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  padding: 4px 8px;
+  margin-right: 6px;
+  outline: none;
+  width: 200px;
+}
+
+.search-controls {
+  display: flex;
+}
+
+.search-controls button {
+  background: transparent;
+  border: none;
+  color: var(--foreground);
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-left: 2px;
+  border-radius: 3px;
+}
+
+.search-controls button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 /* Scrollbar Styling */

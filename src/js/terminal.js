@@ -8,6 +8,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   let contextMenuVisible = false;
   let menuVisible = false;
   let selectedMenu = null;
+  let submenuVisible = false;
+  let selectedSubmenu = null;
+  let currentFontSize = 14;
   
   // Terminal themes
   const themes = {
@@ -68,21 +71,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       window.api.closeWindow();
     });
     
-    // New tab buttons
+    // Tab control buttons
     document.getElementById('new-tab-btn').addEventListener('click', createNewTerminal);
     document.getElementById('new-tab-button').addEventListener('click', createNewTerminal);
-    
-    // Clear button
-    document.getElementById('clear-btn').addEventListener('click', () => {
-      if (activeTerminalId && terminals[activeTerminalId]) {
-        terminals[activeTerminalId].term.clear();
+    document.getElementById('trash-btn')?.addEventListener('click', () => {
+      if (activeTerminalId) {
+        closeTerminal(activeTerminalId);
       }
     });
-    
-    // Send output button
-    document.getElementById('send-output-btn').addEventListener('click', () => {
-      sendCurrentOutput();
-    });
+    document.getElementById('next-tab-btn')?.addEventListener('click', navigateToNextTab);
     
     // Menu items
     const menuItems = document.querySelectorAll('.menu-item');
@@ -93,16 +90,89 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
     });
     
-    // Menu actions
+    // Initialize menu actions
+    initMenuActions();
+    
+    // Hide menus when clicking elsewhere
+    document.addEventListener('click', (e) => {
+      // Don't hide if clicking on a menu item or dropdown menu
+      if (e.target.closest('.menu-item') || e.target.closest('.dropdown-menu')) {
+        return;
+      }
+      
+      hideAllMenus();
+    });
+    
+    // Submenu triggers
+    document.querySelectorAll('.submenu-trigger').forEach(trigger => {
+      trigger.addEventListener('mouseenter', (e) => {
+        const submenuName = e.target.dataset.submenu;
+        showSubmenu(submenuName, e.target);
+      });
+    });
+    
+    // Initialize context menu
+    initContextMenu();
+    
+    // Initialize search panel
+    initSearchPanel();
+    
+    // Window resize event
+    window.addEventListener('resize', () => {
+      if (activeTerminalId && terminals[activeTerminalId]) {
+        terminals[activeTerminalId].fitAddon.fit();
+      }
+    });
+    
+    // Keyboard shortcuts
+    initKeyboardShortcuts();
+    
+    // Terminal events from main process
+    initTerminalEvents();
+  }
+
+  // Initialize menu actions
+  function initMenuActions() {
+    // MCP Menu
+    document.getElementById('menu-new-window')?.addEventListener('click', () => {
+      hideAllMenus();
+      window.api.createWindow();
+    });
+    
+    document.getElementById('menu-settings')?.addEventListener('click', () => {
+      hideAllMenus();
+      // TODO: Show settings
+    });
+    
+    document.getElementById('menu-exit')?.addEventListener('click', () => {
+      hideAllMenus();
+      window.api.quit();
+    });
+    
+    // Terminal Menu
     document.getElementById('menu-new-tab')?.addEventListener('click', () => {
       hideAllMenus();
       createNewTerminal();
+    });
+    
+    document.getElementById('menu-close-tab')?.addEventListener('click', () => {
+      hideAllMenus();
+      if (activeTerminalId) {
+        closeTerminal(activeTerminalId);
+      }
     });
     
     document.getElementById('menu-clear')?.addEventListener('click', () => {
       hideAllMenus();
       if (activeTerminalId && terminals[activeTerminalId]) {
         terminals[activeTerminalId].term.clear();
+      }
+    });
+    
+    document.getElementById('menu-reset')?.addEventListener('click', () => {
+      hideAllMenus();
+      if (activeTerminalId && terminals[activeTerminalId]) {
+        terminals[activeTerminalId].term.reset();
       }
     });
     
@@ -121,32 +191,111 @@ document.addEventListener('DOMContentLoaded', async () => {
       navigateToPreviousTab();
     });
     
-    // Hide menus when clicking elsewhere
-    document.addEventListener('click', (e) => {
-      // Don't hide if clicking on a menu item
-      if (e.target.closest('.menu-item') || e.target.closest('.dropdown-menu')) {
-        return;
+    // Edit Menu
+    document.getElementById('menu-copy')?.addEventListener('click', () => {
+      hideAllMenus();
+      if (activeTerminalId && terminals[activeTerminalId] && terminals[activeTerminalId].term.hasSelection()) {
+        navigator.clipboard.writeText(terminals[activeTerminalId].term.getSelection());
+      }
+    });
+    
+    document.getElementById('menu-paste')?.addEventListener('click', () => {
+      hideAllMenus();
+      if (activeTerminalId && terminals[activeTerminalId]) {
+        navigator.clipboard.readText().then(text => {
+          window.api.sendTerminalInput(activeTerminalId, text);
+        });
+      }
+    });
+    
+    document.getElementById('menu-select-all')?.addEventListener('click', () => {
+      hideAllMenus();
+      if (activeTerminalId && terminals[activeTerminalId]) {
+        terminals[activeTerminalId].term.selectAll();
+      }
+    });
+    
+    document.getElementById('menu-find')?.addEventListener('click', () => {
+      hideAllMenus();
+      showSearchPanel();
+    });
+    
+    // View Menu
+    document.getElementById('menu-toggle-theme')?.addEventListener('click', () => {
+      hideAllMenus();
+      toggleTheme();
+    });
+    
+    document.getElementById('menu-increase-font')?.addEventListener('click', () => {
+      hideAllMenus();
+      changeFontSize(1);
+    });
+    
+    document.getElementById('menu-decrease-font')?.addEventListener('click', () => {
+      hideAllMenus();
+      changeFontSize(-1);
+    });
+    
+    document.getElementById('menu-toggle-menu-bar')?.addEventListener('click', () => {
+      hideAllMenus();
+      toggleMenuBar();
+    });
+    
+    // Window Menu
+    document.getElementById('menu-fullscreen')?.addEventListener('click', () => {
+      hideAllMenus();
+      window.api.toggleFullscreen();
+    });
+    
+    // Developer Tools Menu
+    document.getElementById('menu-toggle-dev-tools')?.addEventListener('click', () => {
+      hideAllMenus();
+      window.api.toggleDevTools();
+    });
+    
+    document.getElementById('menu-reload')?.addEventListener('click', () => {
+      hideAllMenus();
+      window.api.reloadWindow();
+    });
+    
+    document.getElementById('menu-force-reload')?.addEventListener('click', () => {
+      hideAllMenus();
+      window.api.forceReload();
+    });
+    
+    // Help Menu
+    document.getElementById('menu-keyboard-shortcuts')?.addEventListener('click', () => {
+      hideAllMenus();
+      // TODO: Show keyboard shortcuts
+    });
+    
+    document.getElementById('menu-about')?.addEventListener('click', () => {
+      hideAllMenus();
+      // TODO: Show about dialog
+    });
+  }
+  
+  // Initialize keyboard shortcuts
+  function initKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+      // Ctrl+Shift+N (New Window)
+      if (e.ctrlKey && e.shiftKey && e.key === 'N') {
+        e.preventDefault();
+        window.api.createWindow();
       }
       
-      hideAllMenus();
-    });
-    
-    // Initialize context menu
-    initContextMenu();
-    
-    // Window resize event
-    window.addEventListener('resize', () => {
-      if (activeTerminalId && terminals[activeTerminalId]) {
-        terminals[activeTerminalId].fitAddon.fit();
-      }
-    });
-    
-    // Keyboard shortcuts
-    document.addEventListener('keydown', (e) => {
       // Ctrl+Shift+T (New Tab)
-      if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+      else if (e.ctrlKey && e.shiftKey && e.key === 'T') {
         e.preventDefault();
         createNewTerminal();
+      }
+      
+      // Ctrl+W (Close Tab)
+      else if (e.ctrlKey && e.key === 'w') {
+        e.preventDefault();
+        if (activeTerminalId) {
+          closeTerminal(activeTerminalId);
+        }
       }
       
       // Ctrl+Tab (Next Tab)
@@ -178,6 +327,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }
       
+      // Ctrl+A (Select All)
+      else if (e.ctrlKey && e.key === 'a') {
+        e.preventDefault();
+        if (activeTerminalId && terminals[activeTerminalId]) {
+          terminals[activeTerminalId].term.selectAll();
+        }
+      }
+      
+      // Ctrl+F (Find)
+      else if (e.ctrlKey && e.key === 'f') {
+        e.preventDefault();
+        showSearchPanel();
+      }
+      
       // Ctrl+K (Clear)
       else if (e.ctrlKey && e.key === 'k') {
         e.preventDefault();
@@ -185,38 +348,123 @@ document.addEventListener('DOMContentLoaded', async () => {
           terminals[activeTerminalId].term.clear();
         }
       }
-    });
-    
-    // Receive terminal data from main process
-    window.api.onTerminalData((data) => {
-      // If data doesn't have sessionId, assume it's for the active terminal
-      const sessionId = data.sessionId || activeTerminalId;
       
+      // Ctrl++ (Increase Font)
+      else if (e.ctrlKey && (e.key === '+' || e.key === '=')) {
+        e.preventDefault();
+        changeFontSize(1);
+      }
+      
+      // Ctrl+- (Decrease Font)
+      else if (e.ctrlKey && e.key === '-') {
+        e.preventDefault();
+        changeFontSize(-1);
+      }
+      
+      // F11 (Fullscreen)
+      else if (e.key === 'F11') {
+        e.preventDefault();
+        window.api.toggleFullscreen();
+      }
+      
+      // F12 (Developer Tools)
+      else if (e.key === 'F12') {
+        e.preventDefault();
+        window.api.toggleDevTools();
+      }
+      
+      // Alt (Toggle Menu Bar)
+      else if (e.key === 'Alt') {
+        e.preventDefault();
+        toggleMenuBar();
+      }
+      
+      // ESC (Close Menus/Search)
+      else if (e.key === 'Escape') {
+        if (menuVisible) {
+          e.preventDefault();
+          hideAllMenus();
+        }
+        
+        const searchPanel = document.getElementById('search-panel');
+        if (searchPanel && searchPanel.classList.contains('show')) {
+          e.preventDefault();
+          searchPanel.classList.remove('show');
+        }
+      }
+    });
+  }
+  
+  // Initialize terminal events from main process
+  function initTerminalEvents() {
+    // Terminal data event
+    window.api.onTerminalData(({ sessionId, data }) => {
       if (terminals[sessionId]) {
-        terminals[sessionId].term.write(data.data || data);
+        terminals[sessionId].term.write(data);
+        
+        // Update terminal info if this is the active terminal
+        if (sessionId === activeTerminalId) {
+          updateTerminalInfo(sessionId);
+        }
       }
     });
     
     // Terminal exit event
-    window.api.onTerminalExit((data) => {
-      const sessionId = data.sessionId || activeTerminalId;
-      const exitCode = data.exitCode || data;
-      
+    window.api.onTerminalExit(({ sessionId, exitCode }) => {
       if (terminals[sessionId]) {
-        terminals[sessionId].term.write(`\r\n\r\nProcess exited with code ${exitCode}\r\n`);
-        terminals[sessionId].exited = true;
-        updateTabTitle(sessionId, 'Terminal (Closed)');
+        // Update terminal status
+        terminals[sessionId].exitCode = exitCode;
+        
+        // Update UI to indicate terminal has exited
+        updateTabTitle(sessionId, terminals[sessionId].title + " [Exited]");
       }
     });
     
-    // Session ID event
+    // Session ID event (triggered by MCP when a session is created via API)
     window.api.onSessionId((sessionId) => {
+      // Check if this session already exists
       if (!terminals[sessionId]) {
-        // If this is a new session ID, create a terminal for it
         createTerminalForSession(sessionId);
-      } else {
-        // Update the terminal info
-        updateTerminalInfo(sessionId);
+      }
+      
+      // Set this as the active terminal
+      setActiveTerminal(sessionId);
+    });
+    
+    // Terminal close response event
+    window.api.onTerminalCloseResponse(({ sessionId, success, error }) => {
+      if (!success) {
+        console.warn(`Failed to close terminal session ${sessionId}:`, error);
+      }
+      
+      // Ensure the terminal UI is removed regardless of main process success
+      if (terminals[sessionId]) {
+        try {
+          // If the terminal tab is still in the UI, remove it
+          const container = terminals[sessionId].container;
+          if (container && container.parentNode) {
+            container.parentNode.removeChild(container);
+          }
+          
+          const tab = document.getElementById(`tab-${sessionId}`);
+          if (tab && tab.parentNode) {
+            tab.parentNode.removeChild(tab);
+          }
+          
+          // Clean up xterm.js instance
+          if (terminals[sessionId].term) {
+            try {
+              terminals[sessionId].term.dispose();
+            } catch (termError) {
+              console.error(`Error disposing terminal ${sessionId}:`, termError);
+            }
+          }
+          
+          // Remove from terminals object
+          delete terminals[sessionId];
+        } catch (uiError) {
+          console.error(`Error removing terminal UI ${sessionId}:`, uiError);
+        }
       }
     });
   }
@@ -279,6 +527,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         case 'new-tab':
           createNewTerminal();
           break;
+        
+        case 'dev-tools':
+          window.api.toggleDevTools();
+          break;
       }
       
       // Hide the menu
@@ -287,10 +539,88 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
   
+  // Initialize search panel
+  function initSearchPanel() {
+    const searchPanel = document.getElementById('search-panel');
+    const searchInput = document.getElementById('search-input');
+    const searchPrevBtn = document.getElementById('search-prev-btn');
+    const searchNextBtn = document.getElementById('search-next-btn');
+    const searchCloseBtn = document.getElementById('search-close-btn');
+    
+    if (!searchPanel) return;
+    
+    // Set up search handlers
+    searchInput.addEventListener('input', () => {
+      const query = searchInput.value;
+      if (query && activeTerminalId && terminals[activeTerminalId]) {
+        terminals[activeTerminalId].searchAddon.findNext(query);
+      }
+    });
+    
+    // Previous match
+    searchPrevBtn.addEventListener('click', () => {
+      const query = searchInput.value;
+      if (query && activeTerminalId && terminals[activeTerminalId]) {
+        terminals[activeTerminalId].searchAddon.findPrevious(query);
+      }
+    });
+    
+    // Next match
+    searchNextBtn.addEventListener('click', () => {
+      const query = searchInput.value;
+      if (query && activeTerminalId && terminals[activeTerminalId]) {
+        terminals[activeTerminalId].searchAddon.findNext(query);
+      }
+    });
+    
+    // Close search
+    searchCloseBtn.addEventListener('click', () => {
+      searchPanel.classList.remove('show');
+      if (activeTerminalId && terminals[activeTerminalId]) {
+        terminals[activeTerminalId].term.focus();
+      }
+    });
+    
+    // Enter key behavior
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const query = searchInput.value;
+        if (query && activeTerminalId && terminals[activeTerminalId]) {
+          if (e.shiftKey) {
+            terminals[activeTerminalId].searchAddon.findPrevious(query);
+          } else {
+            terminals[activeTerminalId].searchAddon.findNext(query);
+          }
+        }
+      } else if (e.key === 'Escape') {
+        searchPanel.classList.remove('show');
+        if (activeTerminalId && terminals[activeTerminalId]) {
+          terminals[activeTerminalId].term.focus();
+        }
+      }
+    });
+  }
+  
+  // Show search panel
+  function showSearchPanel() {
+    const searchPanel = document.getElementById('search-panel');
+    if (!searchPanel) return;
+    
+    searchPanel.classList.add('show');
+    const searchInput = document.getElementById('search-input');
+    searchInput.focus();
+    searchInput.select();
+  }
+  
   // Toggle menu visibility
   function toggleMenu(menuName) {
     const menu = document.getElementById(`${menuName}-menu`);
     if (!menu) return;
+    
+    // Reset any active menu items
+    document.querySelectorAll('.menu-item').forEach(item => {
+      item.classList.remove('active');
+    });
     
     // If this menu is already open, close it
     if (menuVisible && selectedMenu === menuName) {
@@ -309,6 +639,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       const rect = menuItem.getBoundingClientRect();
       menu.style.left = `${rect.left}px`;
       menu.style.top = `${rect.bottom}px`;
+      
+      // Mark this menu item as active
+      menuItem.classList.add('active');
     }
     
     // Show the menu
@@ -317,22 +650,159 @@ document.addEventListener('DOMContentLoaded', async () => {
     selectedMenu = menuName;
   }
   
+  // Show submenu
+  function showSubmenu(submenuName, trigger) {
+    const submenu = document.getElementById(`${submenuName}-menu`);
+    if (!submenu) return;
+    
+    // Hide any open submenu
+    hideAllSubmenus();
+    
+    // Position the submenu
+    const rect = trigger.getBoundingClientRect();
+    submenu.style.left = `${rect.right}px`;
+    submenu.style.top = `${rect.top}px`;
+    
+    // Show the submenu
+    submenu.classList.add('show');
+    submenuVisible = true;
+    selectedSubmenu = submenuName;
+    
+    // Handle submenu hover out
+    submenu.addEventListener('mouseleave', () => {
+      setTimeout(() => {
+        if (!submenu.matches(':hover') && !trigger.matches(':hover')) {
+          submenu.classList.remove('show');
+          submenuVisible = false;
+          selectedSubmenu = null;
+        }
+      }, 100);
+    });
+  }
+  
   // Hide all dropdown menus
   function hideAllMenus() {
-    const menus = document.querySelectorAll('.dropdown-menu');
+    // Reset active menu items
+    document.querySelectorAll('.menu-item').forEach(item => {
+      item.classList.remove('active');
+    });
+    
+    // Hide menus
+    const menus = document.querySelectorAll('.dropdown-menu:not(.submenu)');
     menus.forEach(menu => {
       menu.classList.remove('show');
     });
+    
     menuVisible = false;
     selectedMenu = null;
+    
+    // Also hide submenus
+    hideAllSubmenus();
+  }
+  
+  // Hide all submenus
+  function hideAllSubmenus() {
+    const submenus = document.querySelectorAll('.dropdown-menu.submenu');
+    submenus.forEach(submenu => {
+      submenu.classList.remove('show');
+    });
+    
+    submenuVisible = false;
+    selectedSubmenu = null;
+  }
+  
+  // Toggle theme
+  function toggleTheme() {
+    const currentTheme = document.documentElement.className;
+    const newTheme = currentTheme === 'theme-dark' ? 'theme-light' : 'theme-dark';
+    
+    document.documentElement.className = newTheme;
+    
+    // Update terminal themes
+    const themeKey = newTheme === 'theme-dark' ? 'dark' : 'light';
+    Object.values(terminals).forEach(terminal => {
+      terminal.term.options.theme = themes[themeKey];
+    });
+  }
+  
+  // Change font size
+  function changeFontSize(delta) {
+    currentFontSize = Math.max(8, Math.min(24, currentFontSize + delta));
+    
+    Object.values(terminals).forEach(terminal => {
+      terminal.term.options.fontSize = currentFontSize;
+      terminal.fitAddon.fit();
+    });
+  }
+  
+  // Toggle menu bar
+  function toggleMenuBar() {
+    const appMenuBar = document.querySelector('.app-menu-bar');
+    if (appMenuBar) {
+      appMenuBar.style.display = appMenuBar.style.display === 'none' ? 'flex' : 'none';
+    }
   }
   
   // Create a new terminal tab
   function createNewTerminal() {
     // Request a new terminal from the main process
-    window.api.createTerminal().then(sessionId => {
-      // Create terminal for this session ID
-      createTerminalForSession(sessionId);
+    window.api.createTerminal().then(sessionIdOrError => {
+      // Check if we got an error object back
+      if (sessionIdOrError && typeof sessionIdOrError === 'object' && sessionIdOrError.error) {
+        console.error('Error creating terminal:', sessionIdOrError.message);
+        
+        // Show error message to user
+        const errorMsg = document.createElement('div');
+        errorMsg.style.position = 'fixed';
+        errorMsg.style.top = '50%';
+        errorMsg.style.left = '50%';
+        errorMsg.style.transform = 'translate(-50%, -50%)';
+        errorMsg.style.backgroundColor = 'rgba(200, 0, 0, 0.8)';
+        errorMsg.style.color = 'white';
+        errorMsg.style.padding = '15px 20px';
+        errorMsg.style.borderRadius = '5px';
+        errorMsg.style.zIndex = '1000';
+        errorMsg.textContent = `Terminal error: ${sessionIdOrError.message || 'Failed to create terminal process'}`;
+        
+        document.body.appendChild(errorMsg);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+          errorMsg.style.opacity = '0';
+          errorMsg.style.transition = 'opacity 0.5s';
+          setTimeout(() => {
+            if (errorMsg.parentNode) {
+              errorMsg.parentNode.removeChild(errorMsg);
+            }
+          }, 500);
+        }, 3000);
+        
+        // Try to reuse existing terminal if available
+        if (activeTerminalId && terminals[activeTerminalId]) {
+          setActiveTerminal(activeTerminalId);
+          return;
+        }
+        
+        // If no existing terminal, try one more time with delay
+        setTimeout(() => {
+          window.api.createTerminal().then(secondAttemptSession => {
+            if (secondAttemptSession && typeof secondAttemptSession !== 'object') {
+              createTerminalForSession(secondAttemptSession);
+            } else {
+              console.error('Second attempt to create terminal failed');
+            }
+          }).catch(err => {
+            console.error('Second attempt error:', err);
+          });
+        }, 1000);
+        
+        return;
+      }
+      
+      // Normal case - we got a valid session ID
+      createTerminalForSession(sessionIdOrError);
+    }).catch(err => {
+      console.error('Error creating terminal:', err);
     });
   }
   
@@ -350,7 +820,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Create the xterm.js instance
     const term = new Terminal({
       fontFamily: 'Consolas, monospace',
-      fontSize: 14,
+      fontSize: currentFontSize,
       cursorStyle: 'block',
       cursorBlink: true,
       theme: themes.dark,
@@ -389,11 +859,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Set up terminal events
     term.onData(data => {
-      window.api.sendTerminalInput(sessionId, data);
+      if (sessionId) {
+        window.api.sendTerminalInput(sessionId, data);
+      }
     });
     
     term.onResize(({ cols, rows }) => {
-      window.api.resizeTerminal(sessionId, cols, rows);
+      if (sessionId) {
+        window.api.resizeTerminal(sessionId, cols, rows);
+      }
       
       if (sessionId === activeTerminalId) {
         document.getElementById('terminal-size').textContent = `${cols}×${rows}`;
@@ -505,7 +979,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Update terminal information in the status bar
   function updateTerminalInfo(sessionId) {
     if (sessionId === activeTerminalId) {
-      document.getElementById('terminal-info').textContent = `Session ID: ${sessionId}`;
+      document.getElementById('session-id').textContent = `Session ID: ${sessionId}`;
       
       const { cols, rows } = terminals[sessionId].term;
       document.getElementById('terminal-size').textContent = `${cols}×${rows}`;
@@ -516,27 +990,200 @@ document.addEventListener('DOMContentLoaded', async () => {
   function closeTerminal(sessionId) {
     if (!terminals[sessionId]) return;
     
-    // Remove the terminal container
-    terminals[sessionId].container.remove();
+    try {
+      // Safety check - ensure we have at least one terminal left or create a new one
+      const terminalIds = Object.keys(terminals);
+      if (terminalIds.length <= 1) {
+        // Create a new terminal first before closing this one
+        window.api.createTerminal().then(sessionIdOrError => {
+          // Check if we got an error object back
+          if (sessionIdOrError && typeof sessionIdOrError === 'object' && sessionIdOrError.error) {
+            console.error('Error creating replacement terminal:', sessionIdOrError.message);
+            
+            // Just remove the current terminal anyway, but keep the UI element visible
+            // to avoid empty app state
+            const container = terminals[sessionId].container;
+            const tab = document.getElementById(`tab-${sessionId}`);
+            
+            // Create a placeholder with error message
+            const errorPlaceholder = document.createElement('div');
+            errorPlaceholder.className = 'terminal-error-state';
+            errorPlaceholder.style.width = '100%';
+            errorPlaceholder.style.height = '100%';
+            errorPlaceholder.style.display = 'flex';
+            errorPlaceholder.style.flexDirection = 'column';
+            errorPlaceholder.style.justifyContent = 'center';
+            errorPlaceholder.style.alignItems = 'center';
+            errorPlaceholder.style.backgroundColor = '#1e1e1e';
+            errorPlaceholder.style.color = '#e74c3c';
+            errorPlaceholder.innerHTML = `
+              <h3>Terminal Error</h3>
+              <p>${sessionIdOrError.message || 'Failed to create terminal process'}</p>
+              <button id="retry-terminal-btn" style="padding: 5px 10px; margin-top: 15px; background: #2980b9; color: white; border: none; border-radius: 3px; cursor: pointer;">Retry</button>
+            `;
+            
+            // Replace terminal with placeholder
+            if (container && container.parentNode) {
+              container.style.display = 'none';
+              container.parentNode.appendChild(errorPlaceholder);
+              
+              // Add retry button handler
+              const retryBtn = document.getElementById('retry-terminal-btn');
+              if (retryBtn) {
+                retryBtn.addEventListener('click', () => {
+                  errorPlaceholder.parentNode.removeChild(errorPlaceholder);
+                  createNewTerminal();
+                });
+              }
+            }
+            
+            // Update tab to show error
+            if (tab) {
+              const titleElement = tab.querySelector('.tab-title');
+              if (titleElement) {
+                titleElement.textContent = 'Terminal Error';
+                titleElement.style.color = '#e74c3c';
+              }
+            }
+            
+            // Don't actually remove the terminal process yet to avoid empty state
+            window.api.closeTerminal(sessionId);
+          } else {
+            // Successfully created replacement terminal
+            createTerminalForSession(sessionIdOrError);
+            
+            // Now safe to remove the old terminal
+            removeTerminal(sessionId);
+          }
+        }).catch(err => {
+          console.error('Error creating replacement terminal:', err);
+          // Failed to create replacement terminal, but still need to close current one
+          removeTerminal(sessionId);
+          // Create an empty placeholder terminal
+          createEmptyTerminalPlaceholder();
+        });
+      } else {
+        // Safe to remove - we have other terminals
+        removeTerminal(sessionId);
+        
+        // Activate another terminal if this was the active one
+        if (activeTerminalId === sessionId) {
+          const remainingIds = Object.keys(terminals).filter(id => id !== sessionId);
+          if (remainingIds.length > 0) {
+            setActiveTerminal(remainingIds[0]);
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`Error closing terminal ${sessionId}:`, error);
+      
+      // Try direct removal as last resort
+      try {
+        if (terminals[sessionId]) {
+          window.api.closeTerminal(sessionId);
+          delete terminals[sessionId];
+        }
+      } catch (e) {
+        console.error('Final cleanup error:', e);
+      }
+    }
+  }
+  
+  // Helper function to create an empty terminal placeholder
+  function createEmptyTerminalPlaceholder() {
+    const placeholder = document.createElement('div');
+    placeholder.className = 'terminal-placeholder';
+    placeholder.style.width = '100%';
+    placeholder.style.height = '100%';
+    placeholder.style.display = 'flex';
+    placeholder.style.flexDirection = 'column';
+    placeholder.style.justifyContent = 'center';
+    placeholder.style.alignItems = 'center';
+    placeholder.style.backgroundColor = '#1e1e1e';
+    placeholder.style.color = '#95a5a6';
+    placeholder.innerHTML = `
+      <h3>Terminal Error</h3>
+      <p>Could not create terminal process</p>
+      <button id="retry-terminal-btn" style="padding: 5px 10px; margin-top: 15px; background: #2980b9; color: white; border: none; border-radius: 3px; cursor: pointer;">Retry</button>
+    `;
     
-    // Remove the tab
-    const tab = document.getElementById(`tab-${sessionId}`);
-    if (tab) {
-      tab.remove();
+    // Add to container
+    const terminalsContainer = document.getElementById('terminals-container');
+    if (terminalsContainer) {
+      terminalsContainer.appendChild(placeholder);
+      
+      // Add retry button handler
+      const retryBtn = document.getElementById('retry-terminal-btn');
+      if (retryBtn) {
+        retryBtn.addEventListener('click', () => {
+          placeholder.parentNode.removeChild(placeholder);
+          createNewTerminal();
+        });
+      }
     }
     
-    // Clean up
-    terminals[sessionId].term.dispose();
-    delete terminals[sessionId];
+    // Create a placeholder tab
+    const tab = document.createElement('div');
+    tab.className = 'tab active';
+    tab.innerHTML = `
+      <span class="tab-title">Terminal Error</span>
+      <span class="tab-close">×</span>
+    `;
     
-    // If this was the active terminal, activate another one
-    if (activeTerminalId === sessionId) {
-      const remainingIds = Object.keys(terminals);
-      if (remainingIds.length > 0) {
-        setActiveTerminal(remainingIds[0]);
-      } else {
-        // No terminals left, create a new one
+    // Add to tabs
+    const tabsContainer = document.getElementById('tabs');
+    const newTabButton = document.getElementById('new-tab-button');
+    if (tabsContainer && newTabButton) {
+      tabsContainer.insertBefore(tab, newTabButton);
+      
+      // Handle click on close button
+      tab.querySelector('.tab-close').addEventListener('click', () => {
+        if (placeholder.parentNode) {
+          placeholder.parentNode.removeChild(placeholder);
+        }
+        if (tab.parentNode) {
+          tab.parentNode.removeChild(tab);
+        }
         createNewTerminal();
+      });
+    }
+  }
+  
+  // Helper function to remove a terminal
+  function removeTerminal(sessionId) {
+    if (!terminals[sessionId]) return;
+    
+    try {
+      // Request cleanup of terminal process on the main side
+      window.api.closeTerminal(sessionId);
+      
+      // UI cleanup is handled by the onTerminalCloseResponse event handler
+      // This function now just initiates the close request to the main process
+    } catch (err) {
+      console.error(`Error initiating removal of terminal ${sessionId}:`, err);
+      
+      // Fallback cleanup if the IPC request fails
+      try {
+        // Clean up UI elements
+        const container = terminals[sessionId].container;
+        if (container && container.parentNode) {
+          container.parentNode.removeChild(container);
+        }
+        
+        const tab = document.getElementById(`tab-${sessionId}`);
+        if (tab && tab.parentNode) {
+          tab.parentNode.removeChild(tab);
+        }
+        
+        // Dispose the terminal instance
+        if (terminals[sessionId].term) {
+          terminals[sessionId].term.dispose();
+        }
+        
+        // Remove from terminals object
+        delete terminals[sessionId];
+      } catch (cleanupErr) {
+        console.error(`Error during fallback cleanup for terminal ${sessionId}:`, cleanupErr);
       }
     }
   }
