@@ -179,7 +179,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     document.getElementById('menu-settings')?.addEventListener('click', () => {
       hideAllMenus();
-      // TODO: Show settings
+      loadCurrentSettings();
+      showSettingsModal();
     });
     
     document.getElementById('menu-exit')?.addEventListener('click', () => {
@@ -556,13 +557,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('terminals-container').addEventListener('contextmenu', (e) => {
       e.preventDefault();
       
-      // Position the menu
-      contextMenu.style.left = `${e.pageX}px`;
-      contextMenu.style.top = `${e.pageY}px`;
+      // Check right-click behavior setting
+      const rightClickBehavior = localStorage.getItem('rightClickBehavior') || 'context';
       
-      // Show the menu
-      contextMenu.classList.add('show');
-      contextMenuVisible = true;
+      if (rightClickBehavior === 'paste') {
+        // Paste content from clipboard
+        if (activeTerminalId && terminals[activeTerminalId]) {
+          navigator.clipboard.readText().then(text => {
+            window.api.sendTerminalInput(activeTerminalId, text);
+          });
+        }
+        return;
+      }
+      
+      // For 'context' behavior, show the context menu
+      if (rightClickBehavior === 'context') {
+        // Position the menu
+        contextMenu.style.left = `${e.pageX}px`;
+        contextMenu.style.top = `${e.pageY}px`;
+        
+        // Show the menu
+        contextMenu.classList.add('show');
+        contextMenuVisible = true;
+      }
+      
+      // For 'select' behavior, the terminal will handle word selection automatically
+      // This is configured in the Terminal constructor with rightClickSelectsWord
     });
     
     // Hide context menu on click outside
@@ -976,22 +996,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     terminalContainer.className = 'terminal-instance';
     document.getElementById('terminals-container').appendChild(terminalContainer);
     
+    // Get terminal settings from localStorage
+    const fontFamily = localStorage.getItem('fontFamily') || 'Consolas, "Cascadia Mono", "Source Code Pro", monospace';
+    const cursorStyle = localStorage.getItem('cursorStyle') || 'block';
+    const cursorBlink = localStorage.getItem('cursorBlink') !== 'false';
+    const scrollback = parseInt(localStorage.getItem('scrollback') || '5000');
+    const allowTransparency = localStorage.getItem('allowTransparency') !== 'false';
+    const rendererType = localStorage.getItem('rendererType') || 'canvas';
+    const macOptionIsMeta = localStorage.getItem('macOptionIsMeta') !== 'false';
+    const wordSeparator = localStorage.getItem('wordSeparator') || ' ()[]{}\'",.;:';
+    
     // Create the xterm.js instance
     const term = new Terminal({
-      fontFamily: 'Consolas, "Cascadia Mono", "Source Code Pro", monospace',
+      fontFamily: fontFamily,
       fontSize: currentFontSize,
-      cursorStyle: 'block',
-      cursorBlink: true,
+      cursorStyle: cursorStyle,
+      cursorBlink: cursorBlink,
       theme: themes[currentTheme],
-      scrollback: 5000,
-      allowTransparency: true,
+      scrollback: scrollback,
+      allowTransparency: allowTransparency,
       convertEol: true,
       disableStdin: false,
       smoothScrollDuration: 300,
-      rightClickSelectsWord: true,
-      macOptionIsMeta: true,
-      rendererType: 'canvas',
-      allowProposedApi: true
+      rightClickSelectsWord: localStorage.getItem('rightClickBehavior') === 'select',
+      macOptionIsMeta: macOptionIsMeta,
+      rendererType: rendererType,
+      allowProposedApi: true,
+      wordSeparator: wordSeparator
     });
     
     // Create addons
@@ -1025,6 +1056,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     term.onData(data => {
       if (sessionId) {
         window.api.sendTerminalInput(sessionId, data);
+      }
+    });
+    
+    // Handle copy on select if enabled
+    term.onSelectionChange(() => {
+      const copyOnSelect = localStorage.getItem('copyOnSelect') === 'true';
+      if (copyOnSelect && term.hasSelection()) {
+        const selection = term.getSelection();
+        navigator.clipboard.writeText(selection);
       }
     });
     
@@ -1561,10 +1601,314 @@ document.addEventListener('DOMContentLoaded', async () => {
     showFeedback('Output sent successfully', 'success');
   }
   
+  // Initialize settings modal
+  function initSettingsModal() {
+    const settingsModal = document.getElementById('settings-modal');
+    const closeButton = document.getElementById('settings-close');
+    const saveButton = document.getElementById('settings-save');
+    const resetButton = document.getElementById('settings-reset');
+    const tabButtons = document.querySelectorAll('.settings-tab-btn');
+    const fontSizeInput = document.getElementById('font-size');
+    const decreaseFontBtn = document.getElementById('decrease-font-btn');
+    const increaseFontBtn = document.getElementById('increase-font-btn');
+    
+    if (!settingsModal) {
+      console.error('Settings modal not found');
+      return;
+    }
+    
+    // Close button
+    closeButton.addEventListener('click', () => {
+      hideSettingsModal();
+    });
+    
+    // Save button
+    saveButton.addEventListener('click', () => {
+      saveSettings();
+      hideSettingsModal();
+    });
+    
+    // Reset button
+    resetButton.addEventListener('click', () => {
+      resetToDefaultSettings();
+    });
+    
+    // Tab switching
+    tabButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        const tabName = button.dataset.tab;
+        switchSettingsTab(tabName);
+      });
+    });
+    
+    // Font size buttons
+    decreaseFontBtn.addEventListener('click', () => {
+      const currentValue = parseInt(fontSizeInput.value);
+      if (currentValue > parseInt(fontSizeInput.min)) {
+        fontSizeInput.value = currentValue - 1;
+      }
+    });
+    
+    increaseFontBtn.addEventListener('click', () => {
+      const currentValue = parseInt(fontSizeInput.value);
+      if (currentValue < parseInt(fontSizeInput.max)) {
+        fontSizeInput.value = currentValue + 1;
+      }
+    });
+    
+    // Close on escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && settingsModal.classList.contains('show')) {
+        hideSettingsModal();
+      }
+    });
+    
+    // Close when clicking outside modal content
+    settingsModal.addEventListener('click', (e) => {
+      if (e.target === settingsModal) {
+        hideSettingsModal();
+      }
+    });
+  }
+  
+  // Load current settings into form
+  function loadCurrentSettings() {
+    // Theme settings
+    const themeSelect = document.getElementById('theme-select');
+    themeSelect.value = currentTheme || 'dark';
+    
+    // Font settings
+    const fontSizeInput = document.getElementById('font-size');
+    fontSizeInput.value = currentFontSize || 14;
+    
+    // Get an active terminal to grab its settings, or use defaults
+    let fontFamily = 'Consolas, "Cascadia Mono", "Source Code Pro", monospace';
+    let cursorStyle = 'block';
+    let cursorBlink = true;
+    let scrollback = 5000;
+    let allowTransparency = true;
+    let rendererType = 'canvas';
+    let macOptionIsMeta = true;
+    
+    // Try to get values from active terminal if available
+    if (terminals[activeTerminalId]?.term) {
+      const activeTerminal = terminals[activeTerminalId].term;
+      
+      fontFamily = activeTerminal.options.fontFamily;
+      cursorStyle = activeTerminal.options.cursorStyle;
+      cursorBlink = activeTerminal.options.cursorBlink;
+      scrollback = activeTerminal.options.scrollback;
+      allowTransparency = activeTerminal.options.allowTransparency;
+      rendererType = activeTerminal.options.rendererType;
+      macOptionIsMeta = activeTerminal.options.macOptionIsMeta;
+    } else {
+      // Try to get values from localStorage if no active terminal
+      fontFamily = localStorage.getItem('fontFamily') || fontFamily;
+      cursorStyle = localStorage.getItem('cursorStyle') || cursorStyle;
+      cursorBlink = localStorage.getItem('cursorBlink') !== 'false';
+      scrollback = parseInt(localStorage.getItem('scrollback') || scrollback);
+      allowTransparency = localStorage.getItem('allowTransparency') !== 'false';
+      rendererType = localStorage.getItem('rendererType') || rendererType;
+      macOptionIsMeta = localStorage.getItem('macOptionIsMeta') !== 'false';
+    }
+    
+    // Set form values
+    const fontFamilySelect = document.getElementById('font-family');
+    fontFamilySelect.value = fontFamily;
+    
+    const cursorStyleSelect = document.getElementById('cursor-style');
+    cursorStyleSelect.value = cursorStyle;
+    
+    const cursorBlinkCheckbox = document.getElementById('cursor-blink');
+    cursorBlinkCheckbox.checked = cursorBlink;
+    
+    const scrollbackInput = document.getElementById('scrollback');
+    scrollbackInput.value = scrollback;
+    
+    const allowTransparencyCheckbox = document.getElementById('allow-transparency');
+    allowTransparencyCheckbox.checked = allowTransparency;
+    
+    const rendererTypeSelect = document.getElementById('renderer-type');
+    rendererTypeSelect.value = rendererType;
+    
+    const macOptionMetaCheckbox = document.getElementById('mac-option-is-meta');
+    macOptionMetaCheckbox.checked = macOptionIsMeta;
+    
+    // Behavior settings from localStorage
+    const copyOnSelectCheckbox = document.getElementById('copy-on-select');
+    copyOnSelectCheckbox.checked = localStorage.getItem('copyOnSelect') === 'true';
+    
+    const rightClickBehaviorSelect = document.getElementById('right-click-behavior');
+    rightClickBehaviorSelect.value = localStorage.getItem('rightClickBehavior') || 'context';
+    
+    const wordSeparatorInput = document.getElementById('word-separator');
+    wordSeparatorInput.value = localStorage.getItem('wordSeparator') || ' ()[]{}\'",.;:';
+    
+    const restoreTabsCheckbox = document.getElementById('restore-tabs');
+    restoreTabsCheckbox.checked = localStorage.getItem('restoreTabs') === 'true';
+  }
+  
+  // Save all settings
+  function saveSettings() {
+    const themeSelect = document.getElementById('theme-select');
+    const fontFamilySelect = document.getElementById('font-family');
+    const fontSizeInput = document.getElementById('font-size');
+    const cursorStyleSelect = document.getElementById('cursor-style');
+    const cursorBlinkCheckbox = document.getElementById('cursor-blink');
+    const scrollbackInput = document.getElementById('scrollback');
+    const copyOnSelectCheckbox = document.getElementById('copy-on-select');
+    const rightClickBehaviorSelect = document.getElementById('right-click-behavior');
+    const wordSeparatorInput = document.getElementById('word-separator');
+    const allowTransparencyCheckbox = document.getElementById('allow-transparency');
+    const rendererTypeSelect = document.getElementById('renderer-type');
+    const macOptionMetaCheckbox = document.getElementById('mac-option-is-meta');
+    const restoreTabsCheckbox = document.getElementById('restore-tabs');
+    
+    // Save to localStorage for persistence
+    localStorage.setItem('theme', themeSelect.value);
+    localStorage.setItem('fontFamily', fontFamilySelect.value);
+    localStorage.setItem('fontSize', fontSizeInput.value);
+    localStorage.setItem('cursorStyle', cursorStyleSelect.value);
+    localStorage.setItem('cursorBlink', cursorBlinkCheckbox.checked);
+    localStorage.setItem('scrollback', scrollbackInput.value);
+    localStorage.setItem('copyOnSelect', copyOnSelectCheckbox.checked);
+    localStorage.setItem('rightClickBehavior', rightClickBehaviorSelect.value);
+    localStorage.setItem('wordSeparator', wordSeparatorInput.value);
+    localStorage.setItem('allowTransparency', allowTransparencyCheckbox.checked);
+    localStorage.setItem('rendererType', rendererTypeSelect.value);
+    localStorage.setItem('macOptionIsMeta', macOptionMetaCheckbox.checked);
+    localStorage.setItem('restoreTabs', restoreTabsCheckbox.checked);
+    
+    // Apply settings to global variables
+    currentTheme = themeSelect.value;
+    currentFontSize = parseInt(fontSizeInput.value);
+    
+    // Apply settings to all terminals
+    Object.values(terminals).forEach(terminal => {
+      // Apply theme
+      terminal.term.options.theme = themes[currentTheme];
+      
+      // Apply font settings
+      terminal.term.options.fontFamily = fontFamilySelect.value;
+      terminal.term.options.fontSize = currentFontSize;
+      
+      // Apply cursor settings
+      terminal.term.options.cursorStyle = cursorStyleSelect.value;
+      terminal.term.options.cursorBlink = cursorBlinkCheckbox.checked;
+      
+      // Apply other terminal settings
+      terminal.term.options.scrollback = parseInt(scrollbackInput.value);
+      terminal.term.options.allowTransparency = allowTransparencyCheckbox.checked;
+      terminal.term.options.rendererType = rendererTypeSelect.value;
+      terminal.term.options.macOptionIsMeta = macOptionMetaCheckbox.checked;
+      terminal.term.options.wordSeparator = wordSeparatorInput.value;
+      
+      // Refresh the terminal
+      terminal.term.refresh(0, terminal.term.rows - 1);
+      terminal.fitAddon.fit();
+    });
+    
+    // Apply theme to document
+    document.documentElement.className = currentTheme === 'dark' ? 'theme-dark' : 'theme-light';
+    
+    // Show success message
+    showFeedback('Settings saved', 'success');
+  }
+  
+  // Reset to default settings
+  function resetToDefaultSettings() {
+    // Default values
+    const defaultSettings = {
+      theme: 'dark',
+      fontFamily: 'Consolas, "Cascadia Mono", "Source Code Pro", monospace',
+      fontSize: '14',
+      cursorStyle: 'block',
+      cursorBlink: true,
+      scrollback: '5000',
+      copyOnSelect: false,
+      rightClickBehavior: 'context',
+      wordSeparator: ' ()[]{}\'",.;:',
+      allowTransparency: true,
+      rendererType: 'canvas',
+      macOptionIsMeta: true,
+      restoreTabs: false
+    };
+    
+    // Set form values to defaults
+    document.getElementById('theme-select').value = defaultSettings.theme;
+    document.getElementById('font-family').value = defaultSettings.fontFamily;
+    document.getElementById('font-size').value = defaultSettings.fontSize;
+    document.getElementById('cursor-style').value = defaultSettings.cursorStyle;
+    document.getElementById('cursor-blink').checked = defaultSettings.cursorBlink;
+    document.getElementById('scrollback').value = defaultSettings.scrollback;
+    document.getElementById('copy-on-select').checked = defaultSettings.copyOnSelect;
+    document.getElementById('right-click-behavior').value = defaultSettings.rightClickBehavior;
+    document.getElementById('word-separator').value = defaultSettings.wordSeparator;
+    document.getElementById('allow-transparency').checked = defaultSettings.allowTransparency;
+    document.getElementById('renderer-type').value = defaultSettings.rendererType;
+    document.getElementById('mac-option-is-meta').checked = defaultSettings.macOptionIsMeta;
+    document.getElementById('restore-tabs').checked = defaultSettings.restoreTabs;
+    
+    // Show feedback
+    showFeedback('Settings reset to defaults', 'info');
+  }
+  
+  // Switch settings tab
+  function switchSettingsTab(tabName) {
+    // Deactivate all tabs
+    document.querySelectorAll('.settings-tab-btn').forEach(btn => {
+      btn.classList.remove('active');
+    });
+    
+    document.querySelectorAll('.settings-tab-pane').forEach(pane => {
+      pane.classList.remove('active');
+    });
+    
+    // Activate the selected tab
+    document.querySelector(`.settings-tab-btn[data-tab="${tabName}"]`).classList.add('active');
+    document.getElementById(`${tabName}-tab`).classList.add('active');
+  }
+  
+  // Show settings modal
+  function showSettingsModal() {
+    const settingsModal = document.getElementById('settings-modal');
+    settingsModal.classList.add('show');
+  }
+  
+  // Hide settings modal
+  function hideSettingsModal() {
+    const settingsModal = document.getElementById('settings-modal');
+    settingsModal.classList.remove('show');
+  }
+  
+  // Load saved settings from localStorage
+  function loadSavedSettings() {
+    // Load theme
+    if (localStorage.getItem('theme')) {
+      currentTheme = localStorage.getItem('theme');
+      document.documentElement.className = currentTheme === 'dark' ? 'theme-dark' : 'theme-light';
+    }
+    
+    // Load font size
+    if (localStorage.getItem('fontSize')) {
+      currentFontSize = parseInt(localStorage.getItem('fontSize'));
+    }
+    
+    // These settings will be applied to new terminals when they are created
+    // We don't need to do anything else here since the terminal creation function
+    // will use these global settings
+  }
+  
   // Initialize the application
   function init() {
     // Set up event listeners
     initEventListeners();
+    
+    // Initialize settings modal
+    initSettingsModal();
+    
+    // Load saved settings from localStorage if available
+    loadSavedSettings();
     
     // Add CSS for new animations
     const style = document.createElement('style');

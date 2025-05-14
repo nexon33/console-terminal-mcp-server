@@ -314,6 +314,184 @@
     </div>
   </div>
 
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Terminal Settings</h2>
+        <button id="settings-close" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="settings-tabs">
+          <div class="settings-tab-header">
+            <button class="settings-tab-btn active" data-tab="appearance">Appearance</button>
+            <button class="settings-tab-btn" data-tab="terminal">Terminal</button>
+            <button class="settings-tab-btn" data-tab="keyboard">Keyboard</button>
+            <button class="settings-tab-btn" data-tab="advanced">Advanced</button>
+          </div>
+          
+          <div class="settings-tab-content">
+            <!-- Appearance Tab -->
+            <div id="appearance-tab" class="settings-tab-pane active">
+              <div class="settings-section">
+                <h3>Theme</h3>
+                <div class="setting-item">
+                  <label for="theme-select">Color Theme</label>
+                  <select id="theme-select" class="setting-input">
+                    <option value="dark">Dark</option>
+                    <option value="light">Light</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div class="settings-section">
+                <h3>Font</h3>
+                <div class="setting-item">
+                  <label for="font-family">Font Family</label>
+                  <select id="font-family" class="setting-input">
+                    <option value="Consolas, 'Cascadia Mono', 'Source Code Pro', monospace">Consolas</option>
+                    <option value="'Cascadia Mono', Consolas, 'Source Code Pro', monospace">Cascadia Mono</option>
+                    <option value="'Source Code Pro', Consolas, monospace">Source Code Pro</option>
+                    <option value="'Fira Code', monospace">Fira Code</option>
+                    <option value="monospace">Monospace</option>
+                  </select>
+                </div>
+                <div class="setting-item">
+                  <label for="font-size">Font Size</label>
+                  <div class="setting-with-buttons">
+                    <button id="decrease-font-btn" class="icon-button">-</button>
+                    <input type="number" id="font-size" class="setting-input" min="8" max="32" value="14">
+                    <button id="increase-font-btn" class="icon-button">+</button>
+                  </div>
+                </div>
+                <div class="setting-item">
+                  <label for="cursor-style">Cursor Style</label>
+                  <select id="cursor-style" class="setting-input">
+                    <option value="block">Block</option>
+                    <option value="underline">Underline</option>
+                    <option value="bar">Bar</option>
+                  </select>
+                </div>
+                <div class="setting-item">
+                  <label for="cursor-blink">Cursor Blink</label>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="cursor-blink" checked>
+                    <span class="toggle-slider"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Terminal Tab -->
+            <div id="terminal-tab" class="settings-tab-pane">
+              <div class="settings-section">
+                <h3>Buffer</h3>
+                <div class="setting-item">
+                  <label for="scrollback">Scrollback Buffer Lines</label>
+                  <input type="number" id="scrollback" class="setting-input" min="500" max="50000" value="5000">
+                </div>
+              </div>
+              
+              <div class="settings-section">
+                <h3>Behavior</h3>
+                <div class="setting-item">
+                  <label for="copy-on-select">Copy on Select</label>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="copy-on-select">
+                    <span class="toggle-slider"></span>
+                  </div>
+                </div>
+                <div class="setting-item">
+                  <label for="right-click-behavior">Right Click Behavior</label>
+                  <select id="right-click-behavior" class="setting-input">
+                    <option value="paste">Paste</option>
+                    <option value="context" selected>Context Menu</option>
+                    <option value="select">Select Word</option>
+                  </select>
+                </div>
+                <div class="setting-item">
+                  <label for="word-separator">Word Separator Characters</label>
+                  <input type="text" id="word-separator" class="setting-input" value=" ()[]{}'\",.;:">
+                </div>
+              </div>
+            </div>
+            
+            <!-- Keyboard Tab -->
+            <div id="keyboard-tab" class="settings-tab-pane">
+              <div class="settings-section">
+                <h3>Shortcuts</h3>
+                <div class="setting-item">
+                  <label for="copy-shortcut">Copy</label>
+                  <input type="text" id="copy-shortcut" class="setting-input" value="Ctrl+C" readonly>
+                </div>
+                <div class="setting-item">
+                  <label for="paste-shortcut">Paste</label>
+                  <input type="text" id="paste-shortcut" class="setting-input" value="Ctrl+V" readonly>
+                </div>
+                <div class="setting-item">
+                  <label for="find-shortcut">Find</label>
+                  <input type="text" id="find-shortcut" class="setting-input" value="Ctrl+F" readonly>
+                </div>
+                <div class="setting-item">
+                  <label for="new-tab-shortcut">New Tab</label>
+                  <input type="text" id="new-tab-shortcut" class="setting-input" value="Ctrl+Shift+T" readonly>
+                </div>
+                <div class="setting-item">
+                  <label for="close-tab-shortcut">Close Tab</label>
+                  <input type="text" id="close-tab-shortcut" class="setting-input" value="Ctrl+W" readonly>
+                </div>
+              </div>
+              <p class="settings-note">Note: Keyboard shortcuts cannot be modified in this version.</p>
+            </div>
+            
+            <!-- Advanced Tab -->
+            <div id="advanced-tab" class="settings-tab-pane">
+              <div class="settings-section">
+                <h3>Terminal Options</h3>
+                <div class="setting-item">
+                  <label for="allow-transparency">Allow Transparency</label>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="allow-transparency" checked>
+                    <span class="toggle-slider"></span>
+                  </div>
+                </div>
+                <div class="setting-item">
+                  <label for="renderer-type">Renderer Type</label>
+                  <select id="renderer-type" class="setting-input">
+                    <option value="canvas" selected>Canvas</option>
+                    <option value="dom">DOM</option>
+                  </select>
+                </div>
+                <div class="setting-item">
+                  <label for="mac-option-is-meta">Mac Option as Meta Key</label>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="mac-option-is-meta" checked>
+                    <span class="toggle-slider"></span>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="settings-section">
+                <h3>Start-Up</h3>
+                <div class="setting-item">
+                  <label for="restore-tabs">Restore Previous Tabs on Start</label>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="restore-tabs">
+                    <span class="toggle-slider"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="settings-reset" class="btn btn-secondary">Reset to Defaults</button>
+        <button id="settings-save" class="btn btn-primary">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Context Menu -->
   <div id="context-menu" class="context-menu">
     <div class="context-menu-item" data-action="copy">
