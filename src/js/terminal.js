@@ -2403,4 +2403,61 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Start the app
   init();
+
+  // Add CSS for new tab button
+  const newTabButtonStyle = document.createElement('style');
+  newTabButtonStyle.textContent = `
+    /* New Tab Button styling */
+    #new-tab-button {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 32px;
+      height: 28px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      margin-left: 4px;
+      margin-right: 8px;
+      border: none;
+      background-color: transparent;
+    }
+    
+    #new-tab-button svg {
+      width: 16px;
+      height: 16px;
+      stroke: var(--accent-color);
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+      opacity: 0.9;
+    }
+    
+    #new-tab-button:hover {
+      background-color: var(--action-hover);
+    }
+    
+    #new-tab-button:active {
+      transform: scale(0.95);
+    }
+    
+    /* Theme-specific styling for the new tab button */
+    .theme-light #new-tab-button svg {
+      stroke: var(--accent-color);
+    }
+    
+    .theme-dark #new-tab-button svg {
+      stroke: var(--accent-color);
+    }
+    
+    .theme-nord #new-tab-button svg {
+      stroke: #88c0d0;
+    }
+    
+    .theme-dracula #new-tab-button svg {
+      stroke: #bd93f9;
+    }
+  `;
+  document.head.appendChild(newTabButtonStyle);
 });

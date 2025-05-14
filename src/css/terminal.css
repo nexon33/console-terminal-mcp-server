@@ -391,23 +391,9 @@ body {
 }
 
 .new-tab-button {
-  width: 36px;
   height: calc(100% - 8px);
   margin: 4px 0 4px 4px;
-  background: transparent;
-  border: none;
-  color: var(--foreground);
-  font-size: 18px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   border-radius: var(--border-radius);
-  transition: background-color var(--transition-speed) ease;
-}
-
-.new-tab-button:hover {
-  background-color: var(--action-hover);
 }
 
 /* Terminals Container */
