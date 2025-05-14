@@ -68,8 +68,12 @@ app.whenReady().then(() => {
   if (process.platform === 'win32') {
     // Patch Windows specific errors that might crash the app
     process.on('uncaughtException', (err) => {
-      if (err.message && err.message.includes('Assertion failed')) {
-        logger.error('Caught ConPTY assertion error:', err);
+      if (err.message && (
+          err.message.includes('Assertion failed') ||
+          err.message.includes('status == napi_ok') ||
+          (err.name === 'AssertionError' && err.message.includes('napi'))
+      )) {
+        logger.error('Caught ConPTY assertion error (safe to ignore):', err);
         // Don't crash, continue running
         return;
       }
@@ -108,6 +112,79 @@ app.whenReady().then(() => {
   
   // Create the main window
   createOrShowMainWindow();
+});
+
+// Handle app will quit - ensure proper terminal cleanup
+app.on('will-quit', (e) => {
+  logger.info('App is quitting - performing terminal cleanup');
+  
+  try {
+    // Set a flag to indicate app is closing
+    global.appIsQuitting = true;
+    
+    // Remove existing error handlers
+    process.removeAllListeners('uncaughtException');
+    
+    // Add a permissive error handler during shutdown
+    process.on('uncaughtException', (err) => {
+      logger.error('Ignored error during app quit:', err);
+      // Don't let any errors stop the quit process
+    });
+    
+    // Windows-specific handling
+    if (process.platform === 'win32') {
+      try {
+        // Use the same aggressive cleanup approach as in window close
+        for (const [sessionId, session] of terminals.entries()) {
+          try {
+            // Disconnect from process before attempting to kill
+            if (session.process) {
+              const tempProcess = session.process;
+              session.process = null;
+              
+              try {
+                tempProcess.kill();
+              } catch (killError) {
+                logger.warn(`Suppressed kill error for session ${sessionId} during app quit`);
+              }
+            }
+          } catch (sessionError) {
+            // Just log and continue with other sessions
+            logger.error(`Error cleaning session ${sessionId} during app quit:`, sessionError);
+          }
+        }
+        
+        // Clear all terminals after the individual cleanup
+        terminals.clear();
+        logger.info('Aggressive Windows terminal cleanup completed');
+      } catch (cleanupError) {
+        logger.error('Error during Windows cleanup on quit:', cleanupError);
+      }
+    } else {
+      // Non-Windows platforms can use the normal cleanup
+      cleanupAllTerminals();
+    }
+    
+    logger.info('Terminal cleanup completed successfully');
+  } catch (error) {
+    logger.error('Error during terminal cleanup on quit:', error);
+    // Continue with quit even if there was an error
+  }
+});
+
+// Handle app 'before-quit' event to clean up resources
+app.on('before-quit', (e) => {
+  logger.info('App is about to quit - preparing for shutdown');
+  
+  // Set global flag
+  global.appIsQuitting = true;
+  
+  // Make sure error handler is in place
+  process.removeAllListeners('uncaughtException');
+  process.on('uncaughtException', (err) => {
+    logger.error('Ignored error during shutdown:', err);
+    // Don't let any errors stop the quit process
+  });
 });
 
 // Create or show the main window
@@ -176,9 +253,58 @@ function createOrShowMainWindow() {
   
   // Handle window close
   mainWindow.on('closed', () => {
-    // Clean up all terminals when the main window is closed
-    cleanupAllTerminals();
-    mainWindow = null;
+    try {
+      // Set a flag to indicate window is closing - helps avoid race conditions
+      global.windowIsClosing = true;
+      
+      // Windows-specific handling for terminal cleanup
+      if (process.platform === 'win32') {
+        try {
+          // Patch the error handler one more time to be extra safe during window close
+          process.removeAllListeners('uncaughtException');
+          process.on('uncaughtException', (err) => {
+            // Just log and continue during window close, don't let any error stop us
+            logger.error('Ignored error during window close:', err);
+          });
+          
+          // Use a more aggressive terminal cleanup approach on Windows
+          for (const [sessionId, session] of terminals.entries()) {
+            try {
+              // Remove all event listeners and disconnect from process before killing
+              if (session.process) {
+                // Remove any process references that might try to use it after close
+                const tempProcess = session.process;
+                session.process = null;
+                
+                // Kill the process as a last step
+                try {
+                  tempProcess.kill();
+                } catch (killError) {
+                  logger.warn(`Suppressed kill error for session ${sessionId} during window close`);
+                }
+              }
+            } catch (sessionError) {
+              // Just log and continue - don't let any single terminal error stop the cleanup
+              logger.error(`Error cleaning session ${sessionId} during window close:`, sessionError);
+            }
+          }
+          
+          // Clear all terminals after the individual cleanup
+          terminals.clear();
+        } catch (cleanupError) {
+          logger.error('Error during aggressive Windows cleanup:', cleanupError);
+        }
+      } else {
+        // Non-Windows platforms can use the normal cleanup
+        cleanupAllTerminals();
+      }
+      
+      // Clear the reference
+      mainWindow = null;
+    } catch (closeError) {
+      logger.error('Error during window close:', closeError);
+      mainWindow = null;
+    }
   });
   
   return mainWindow;
@@ -336,7 +462,29 @@ function cleanupAllTerminals() {
   for (const [sessionId, session] of terminals.entries()) {
     if (session.process) {
       try {
-        session.process.kill();
+        // Set a "being killed" flag to prevent further operations on this process
+        session.isBeingKilled = true;
+        
+        // On Windows, handle potential ConPTY errors
+        if (process.platform === 'win32') {
+          try {
+            session.process.kill();
+          } catch (processKillError) {
+            // Specifically catch and handle ConPTY errors
+            if (processKillError.message && (
+                processKillError.message.includes('Assertion failed') ||
+                processKillError.message.includes('status == napi_ok')
+            )) {
+              logger.warn(`Caught ConPTY assertion error during cleanup for session ${sessionId} (safe to ignore)`);
+            } else {
+              // Log other errors but continue with cleanup
+              logger.error(`Error killing process for session ${sessionId}:`, processKillError);
+            }
+          }
+        } else {
+          // Non-Windows platforms
+          session.process.kill();
+        }
       } catch (e) {
         logger.error(`Error killing process for session ${sessionId}:`, e);
       }
@@ -362,18 +510,46 @@ function cleanupTerminalSession(sessionId) {
     
     const session = terminals.get(sessionId);
     
-    // Kill the process if it exists
-    if (session.process) {
+    // On Windows, use a more aggressive cleanup approach
+    if (process.platform === 'win32') {
       try {
-        session.process.kill();
-      } catch (processError) {
-        logger.error(`Error killing process for session ${sessionId}:`, processError);
-        // Continue with cleanup despite process kill error
+        // Safely handle process cleanup
+        if (session.process) {
+          // First mark as being killed to prevent any new operations
+          session.isBeingKilled = true;
+          
+          // Store process reference and remove from session to break any circular references
+          const tempProcess = session.process;
+          session.process = null;
+          
+          // Now attempt to kill the detached process
+          try {
+            tempProcess.kill();
+          } catch (killError) {
+            // Just log kill errors but don't stop cleanup
+            logger.warn(`Suppressed kill error for session ${sessionId}: ${killError.message}`);
+          }
+        }
+      } catch (windowsError) {
+        logger.error(`Windows-specific cleanup error for session ${sessionId}:`, windowsError);
+        // Continue with cleanup despite error
       }
-      
-      session.status = 'terminated';
-      session.exitCode = EXIT_CODES.MANUAL_TERMINATION;
+    } else {
+      // Non-Windows process cleanup
+      if (session.process) {
+        try {
+          session.isBeingKilled = true;
+          session.process.kill();
+        } catch (processError) {
+          logger.error(`Error killing process for session ${sessionId}:`, processError);
+          // Continue with cleanup despite process kill error
+        }
+      }
     }
+    
+    // Update session status
+    session.status = 'terminated';
+    session.exitCode = EXIT_CODES.MANUAL_TERMINATION;
     
     // Clean up any pending completion signals
     if (pendingCompletionSignals.has(sessionId)) {
@@ -903,19 +1079,6 @@ app.on('activate', () => {
   // On macOS, re-create a window when the dock icon is clicked
   if (mainWindow === null) {
     createOrShowMainWindow();
-  }
-});
-
-// Add app quit handler to clean up all terminal sessions
-app.on('before-quit', () => {
-  logger.info('Application shutting down, cleaning up resources...');
-
-  // Clean up all terminal sessions
-  cleanupAllTerminals();
-  
-  // Stop the MCP server
-  if (mcpServer) {
-    mcpServerSingleton.stop();
   }
 });
 

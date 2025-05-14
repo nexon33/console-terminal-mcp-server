@@ -24,34 +24,44 @@ export function spawn(file, args, options = {}) {
   
   // Windows-specific handling
   if (os.platform() === 'win32') {
+    // Default to WinPTY on Windows instead of ConPTY to avoid assertion errors
+    mergedOptions.useConpty = false;
+    mergedOptions.windowsEnableConsoleTitleChange = false;
+    
     try {
-      // Try with ConPTY first
-      mergedOptions.useConpty = true;
-      mergedOptions.conptyInheritCursor = false;
-      return originalPtySpawn(file, args, mergedOptions);
-    } catch (conptyError) {
-      logger.error('ConPTY initialization failed, falling back to WinPTY:', conptyError);
+      const term = originalPtySpawn(file, args, mergedOptions);
       
-      // Fall back to WinPTY
-      mergedOptions.useConpty = false;
-      mergedOptions.windowsEnableConsoleTitleChange = false;
+      // Replace kill method with safer version
+      const originalKill = term.kill;
+      term.kill = function(signal) {
+        try {
+          // Set a flag to indicate this process is being killed
+          this._isBeingKilled = true;
+          
+          // Defensively wrap the kill call
+          originalKill.call(this, signal);
+        } catch (killError) {
+          // Log but don't crash on kill errors
+          logger.warn('Suppressed error during pty kill:', killError);
+          // Don't rethrow
+        }
+      };
       
-      try {
-        return originalPtySpawn(file, args, mergedOptions);
-      } catch (winptyError) {
-        logger.error('WinPTY initialization also failed:', winptyError);
-        
-        // Last resort - basic options only
-        const basicOptions = {
-          name: 'xterm-color',
-          cols: mergedOptions.cols,
-          rows: mergedOptions.rows,
-          cwd: mergedOptions.cwd,
-          env: mergedOptions.env
-        };
-        
-        return originalPtySpawn(file, args, basicOptions);
-      }
+      return term;
+    } catch (error) {
+      logger.error('WinPTY spawn failed, trying with even more basic options:', error);
+      
+      // Try with minimalist options
+      const basicOptions = {
+        name: 'xterm-color',
+        cols: mergedOptions.cols,
+        rows: mergedOptions.rows,
+        cwd: mergedOptions.cwd,
+        env: mergedOptions.env,
+        useConpty: false
+      };
+      
+      return originalPtySpawn(file, args, basicOptions);
     }
   } else {
     // Non-Windows platforms
