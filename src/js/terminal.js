@@ -2228,6 +2228,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Create search button if it doesn't exist
     createSearchButton();
     
+    // Create terminal footer element with blue border
+    createTerminalFooter();
+    
     // Add CSS for blue borders and terminal styling
     const style = document.createElement('style');
     style.textContent += `
@@ -2263,9 +2266,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         border-right: 1px solid #0078d7;
       }
       
-      /* Status bar with blue border */
+      /* Status bar with no border */
       .status-bar {
-        border-top: 1px solid #0078d7;
+        border-top: none;
+        border-bottom: none;
+        position: relative;
+        padding-bottom: 4px;
+        margin-bottom: 1px;
+      }
+      
+      /* Remove status bar blue glow */
+      .status-bar::after {
+        display: none;
+      }
+      
+      /* Remove blue styled footer */
+      .terminal-footer {
+        display: none;
+      }
+      
+      /* Window border - remove all borders */
+      body {
+        border: none;
+      }
+      
+      /* Create a horizontal blue line at the bottom of the tab bar - remove it */
+      .tabs-container::after {
+        display: none;
       }
       
       /* Terminal glow effect */
@@ -2310,8 +2337,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       /* Title bar with blue styling */
       .titlebar, .window-titlebar {
-        border-bottom: 1px solid #0078d7;
-        box-shadow: 0 2px 4px rgba(0, 120, 215, 0.1);
+        border-bottom: none; /* Remove border from title bar */
+        box-shadow: none;
+      }
+      
+      /* Only keep blue borders at the bottom */
+      .tabs-container {
+        border-bottom: none; /* Remove blue border from tabs container */
       }
       
       /* Blue tabs styling */
@@ -2355,16 +2387,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       .session-id::before {
         background-color: #0078d7;
       }
-      
-      /* Window border */
-      body {
-        border: 1px solid #0078d7;
-      }
     `;
     document.head.appendChild(style);
     
     // Create initial terminal
     createNewTerminal();
+  }
+  
+  // Create a terminal footer with a blue border
+  function createTerminalFooter() {
+    const footer = document.createElement('div');
+    footer.className = 'terminal-footer';
+    document.body.appendChild(footer);
   }
   
   // Start the app
