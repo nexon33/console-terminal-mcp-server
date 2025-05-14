@@ -17,8 +17,9 @@ const DEBUG = true;
 
 // Store active terminal sessions
 const terminals = new Map();
+let mainWindow = null;
 let windowCounter = 0;
-const pendingCompletionSignals = new Map(); // New map for early resolution
+const pendingCompletionSignals = new Map(); // Map for early resolution
 
 // Constants for exit codes
 const EXIT_CODES = {
@@ -77,8 +78,7 @@ app.whenReady().then(() => {
     {
       label: 'New Terminal',
       click: () => {
-        const sessionId = `session_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-        createTerminalWindow('echo Welcome to the new terminal!', sessionId);
+        createOrShowMainWindow();
       }
     },
     { type: 'separator' },
@@ -86,113 +86,136 @@ app.whenReady().then(() => {
   ]);
   tray.setToolTip('MCP Terminal');
   tray.setContextMenu(contextMenu);
+  
+  // Create the main window
+  createOrShowMainWindow();
 });
 
-// Create a new terminal window for a command
-function createTerminalWindow(command, sessionId) {
-  if (DEBUG) {
-    logger.info(`Creating new terminal window for session ${sessionId} with command: ${command}`);
+// Create or show the main window
+function createOrShowMainWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    // If window exists, show it
+    mainWindow.show();
+    return mainWindow;
   }
-  const win = new BrowserWindow({
-    width: 800,
-    height: 600,
-    title: `Terminal - ${command}`,
+  
+  // Create the main window
+  mainWindow = new BrowserWindow({
+    width: 900,
+    height: 700,
+    minWidth: 640,
+    minHeight: 480,
+    title: 'MCP Terminal',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
     },
     backgroundColor: '#1e1e1e',
-    show: false,
-    frame: true
+    show: false
   });
-
-  // Register the session immediately with a placeholder
-  terminals.set(sessionId, {
-    process: null,
-    window: win,
-    buffer: '',
-    command: command,
-    startTime: new Date(),
-    status: 'initializing',
-    sessionId: sessionId,
-    exitCode: null,
-    lastUnblockedOutput: null,
-    lastUnblockedOutputTimestamp: null
-  });
-
+  
   // Load the terminal UI
-  win.loadFile('terminal.html');
+  mainWindow.loadFile('terminal.html');
+  
+  // Show window when ready to avoid flashing
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+  });
+  
+  // Handle window close
+  mainWindow.on('closed', () => {
+    // Clean up all terminals when the main window is closed
+    cleanupAllTerminals();
+    mainWindow = null;
+  });
+  
+  return mainWindow;
+}
 
-  // Once window is ready, create a terminal process
-  win.webContents.on('did-finish-load', () => {
-    let shell, shellArgs;
-    if (os.platform() === 'win32') {
-      shell = 'powershell.exe';
-      shellArgs = ['-NoLogo', '-NoProfile']; // Interactive session
-    } else {
-      shell = 'bash';
-      shellArgs = [];
-    }
-
-    try {
-      // Prepare options object
-      const options = {
-        name: 'xterm-color',
-        cols: 80,
-        rows: 30,
-        cwd: process.env.HOME || process.env.USERPROFILE,
-        env: process.env
-      };
-
-      // Start the terminal process
-      const term = ptySpawn(shell, shellArgs, options);
-
-      // Update the session with the process and running status
+// Create a new terminal process
+function createTerminalProcess(sessionId, command = null) {
+  if (DEBUG) {
+    logger.info(`Creating new terminal process for session ${sessionId}`);
+  }
+  
+  let shell, shellArgs;
+  if (os.platform() === 'win32') {
+    shell = 'powershell.exe';
+    shellArgs = ['-NoLogo', '-NoProfile']; // Interactive session
+  } else {
+    shell = 'bash';
+    shellArgs = [];
+  }
+  
+  try {
+    // Prepare options object
+    const options = {
+      name: 'xterm-color',
+      cols: 80,
+      rows: 30,
+      cwd: process.env.HOME || process.env.USERPROFILE,
+      env: process.env
+    };
+    
+    // Start the terminal process
+    const term = ptySpawn(shell, shellArgs, options);
+    
+    // Create a session for this terminal
+    terminals.set(sessionId, {
+      process: term,
+      buffer: '',
+      command: command || shell,
+      startTime: new Date(),
+      status: 'running',
+      sessionId: sessionId,
+      exitCode: null,
+      lastUnblockedOutput: null,
+      lastUnblockedOutputTimestamp: null
+    });
+    
+    // Buffer for output lines
+    let outputBuffer = '';
+    
+    // Handle terminal output
+    term.onData(data => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('pty-output', { sessionId, data });
+      }
+      
       const session = terminals.get(sessionId);
       if (session) {
-        session.process = term;
-        session.status = 'running';
+        session.buffer += data;
+        outputBuffer += data;
+        
+        // Check for our exit code marker
+        const markerMatch = outputBuffer.match(/__EXITCODE_MARK__:(-?\\d+)/);
+        if (markerMatch) {
+          session.exitCode = parseInt(markerMatch[1], 10);
+          // Remove everything up to and including the marker from the buffer
+          outputBuffer = outputBuffer.slice(outputBuffer.indexOf(markerMatch[0]) + markerMatch[0].length);
+        }
       }
-
-      // Buffer for output lines
-      let outputBuffer = '';
-
-      // Handle terminal output
-      term.onData(data => {
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('pty-output', data);
-        }
-        const session = terminals.get(sessionId);
-        if (session) {
-          session.buffer += data;
-          outputBuffer += data;
-
-          // Check for our exit code marker
-          const markerMatch = outputBuffer.match(/__EXITCODE_MARK__:(-?\\d+)/);
-          if (markerMatch) {
-            session.exitCode = parseInt(markerMatch[1], 10);
-            // Remove everything up to and including the marker from the buffer
-            outputBuffer = outputBuffer.slice(outputBuffer.indexOf(markerMatch[0]) + markerMatch[0].length);
-          }
-        }
-      });
-
-      // Handle terminal exit
-      term.onExit(({ exitCode }) => {
-        const session = terminals.get(sessionId);
-        if (session) {
-          // Don't set status to 'completed' if the terminal exits
-          // Just record the exit code
-          session.exitCode = session.exitCode !== null ? session.exitCode : exitCode;
-          logger.info(`Terminal process exited for session ${sessionId} with code ${session.exitCode}`);
-        }
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('terminal-exit', session.exitCode);
-        }
-      });
-
-      // Send the command and marker to get the exit code
+    });
+    
+    // Handle terminal exit
+    term.onExit(({ exitCode }) => {
+      const session = terminals.get(sessionId);
+      if (session) {
+        // Don't set status to 'completed' if the terminal exits
+        // Just record the exit code
+        session.exitCode = session.exitCode !== null ? session.exitCode : exitCode;
+        logger.info(`Terminal process exited for session ${sessionId} with code ${session.exitCode}`);
+      }
+      
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('terminal-exit', { sessionId, exitCode: session.exitCode });
+      }
+    });
+    
+    // If a command was provided, execute it
+    if (command) {
+      // Execute the command and get the exit code
       if (os.platform() === 'win32') {
         // Define the __exitmark function at the start of the session
         term.write("function __exitmark { $code = if ($LASTEXITCODE -ne $null) { $LASTEXITCODE } elseif ($?) { 0 } else { 1 }; echo __EXITCODE_MARK__:$code }\r");
@@ -203,44 +226,35 @@ function createTerminalWindow(command, sessionId) {
         term.write(`${command}\r`);
         term.write("echo __EXITCODE_MARK__:$?\r"); // Unix equivalent
       }
+    }
+    
+    return sessionId;
+  } catch (error) {
+    logger.error('Failed to create terminal process:', error);
+    
+    // Clean up if session was partially created
+    if (terminals.has(sessionId)) {
+      terminals.get(sessionId).status = 'error';
+      terminals.get(sessionId).exitCode = 2; // General error
+    }
+    
+    throw error;
+  }
+}
 
-      // Tell window which session it's connected to
-      win.webContents.send('session-id', sessionId);
-      
-      // Show the window now that it's ready
-      win.show();
-    } catch (error) {
-      logger.error('Failed to create terminal:', error);
-      win.webContents.send('terminal-error', error.message);
-      const session = terminals.get(sessionId);
-      if (session) {
-        session.status = 'error';
-        session.exitCode = 2; // General error
+// Clean up all terminal sessions
+function cleanupAllTerminals() {
+  for (const [sessionId, session] of terminals.entries()) {
+    if (session.process) {
+      try {
+        session.process.kill();
+      } catch (e) {
+        logger.error(`Error killing process for session ${sessionId}:`, e);
       }
     }
-  });
-
-  // Handle window close
-  win.on('closed', () => {
-    const session = terminals.get(sessionId);
-    if (session && session.process) {
-      session.process.kill();
-      session.status = 'terminated';
-      session.exitCode = EXIT_CODES.MANUAL_TERMINATION;
-      terminals.delete(sessionId);
-    }
-  });
-
-  // Prevent window close from quitting the app
-  win.on('close', (event) => {
-    // Only prevent default if this is a user-initiated close
-    if (!win.isDestroyed()) {
-      event.preventDefault();
-      win.destroy();
-    }
-  });
-
-  return win;
+  }
+  
+  terminals.clear();
 }
 
 // Helper function to wait for command completion
@@ -332,8 +346,14 @@ apiServer.post('/execute', async (req, res) => {
     // Generate unique session ID
     const sessionId = `session_${Date.now()}_${windowCounter++}`;
 
-    // Create a new terminal window for this command
-    const win = createTerminalWindow(command, sessionId);
+    // Create or show the main window
+    createOrShowMainWindow();
+
+    // Create a new terminal process
+    createTerminalProcess(sessionId, command);
+    
+    // Tell the renderer about this new session
+    mainWindow.webContents.send('session-id', sessionId);
 
     // Wait for command completion and get output
     try {
@@ -500,7 +520,34 @@ apiServer.post('/stop/:sessionId', (req, res) => {
   }
 });
 
-// Handle IPC messages from renderer
+// Handle terminal creation request from renderer
+ipcMain.handle('terminal:create', async () => {
+  const sessionId = `session_${Date.now()}_${windowCounter++}`;
+  try {
+    createTerminalProcess(sessionId);
+    return sessionId;
+  } catch (error) {
+    logger.error('Error creating terminal:', error);
+    throw error;
+  }
+});
+
+// Handle terminal closure request from renderer
+ipcMain.on('terminal:close', (event, { sessionId }) => {
+  try {
+    if (terminals.has(sessionId)) {
+      const session = terminals.get(sessionId);
+      if (session.process) {
+        session.process.kill();
+      }
+      terminals.delete(sessionId);
+    }
+  } catch (error) {
+    logger.error(`Error closing terminal ${sessionId}:`, error);
+  }
+});
+
+// Handle terminal input from renderer
 ipcMain.on('pty-input', (event, { sessionId, data }) => {
   try {
     if (terminals.has(sessionId)) {
@@ -595,48 +642,27 @@ ipcMain.on('window:toggle-fullscreen', (event) => {
   }
 });
 
-// Close specific windows
-ipcMain.on('close-window', (event, sessionId) => {
-  try {
-    const session = terminals.get(sessionId);
-    if (session && session.window) {
-      session.window.destroy();
-    }
-  } catch (error) {
-    logger.error('Error closing window:', error);
-  }
-});
-
 // Prevent app from quitting when all windows are closed
 app.on('window-all-closed', (e) => {
-  // Do nothing, keep the app running
+  // Don't quit on all windows closed (macOS behavior)
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
 });
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    const sessionId = `session_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    createTerminalWindow('echo Welcome back!', sessionId);
+  // On macOS, re-create a window when the dock icon is clicked
+  if (mainWindow === null) {
+    createOrShowMainWindow();
   }
 });
-
-// Prevent Node.js from exiting by keeping the event loop busy
-setInterval(() => { }, 1000);
 
 // Add app quit handler to clean up all terminal sessions
 app.on('before-quit', () => {
   logger.info('Application shutting down, cleaning up resources...');
 
   // Clean up all terminal sessions
-  for (const [sessionId, session] of terminals.entries()) {
-    if (session.process) {
-      try {
-        session.process.kill();
-      } catch (e) {
-        logger.error(`Error killing process for session ${sessionId}:`, e);
-      }
-    }
-    terminals.delete(sessionId);
-  }
+  cleanupAllTerminals();
   
   // Stop the MCP server
   if (mcpServer) {

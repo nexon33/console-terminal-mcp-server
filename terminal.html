@@ -19,11 +19,19 @@
       </div>
       <div class="app-title">MCP Terminal</div>
 
-      <!-- Header Spacer to push window controls to the right -->
-      <div class="header-spacer"></div>
+      <!-- Menu Items (Optional) -->
+      <div class="menu-bar">
+        <div class="menu-item" data-menu="terminal">Terminal</div>
+        <div class="menu-item" data-menu="help">Help</div>
+      </div>
 
       <!-- Action Buttons -->
       <div class="action-buttons">
+        <button id="new-tab-btn" class="action-button" title="New Terminal (Ctrl+Shift+N)">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
         <button id="clear-btn" class="action-button" title="Clear Terminal (Ctrl+K)">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M2 4H14M6 4V12M10 4V12M3 4L4 12H12L13 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -35,6 +43,9 @@
           </svg>
         </button>
       </div>
+
+      <!-- Header Spacer to push window controls to the right -->
+      <div class="header-spacer"></div>
 
       <!-- Window Controls -->
       <div class="window-controls">
@@ -56,16 +67,69 @@
       </div>
     </div>
 
+    <!-- Tabs Bar -->
+    <div id="tabs" class="tabs">
+      <!-- Tabs will be generated here dynamically -->
+      <button id="new-tab-button" class="new-tab-button" title="New Tab">+</button>
+    </div>
+
     <!-- Terminal Container -->
-    <div id="terminal-container" class="terminal-container"></div>
+    <div id="terminals-container" class="terminals-container">
+      <!-- Terminal instances will be created here dynamically -->
+    </div>
 
     <!-- Status Bar -->
     <div class="status-bar">
       <div class="status-items-left">
-        <div id="session-id" class="status-item">Session ID: Connecting...</div>
+        <div id="terminal-info" class="status-item">Session ID: Connecting...</div>
       </div>
       <div class="status-items-right">
         <div id="terminal-size" class="status-item">80×24</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dropdown Menus -->
+  <div id="dropdown-menus">
+    <!-- Terminal Menu -->
+    <div id="terminal-menu" class="dropdown-menu" data-parent="terminal">
+      <div class="dropdown-item" id="menu-new-tab">
+        <span class="menu-icon">+</span>
+        <span class="menu-text">New Tab</span>
+        <span class="menu-shortcut">Ctrl+Shift+T</span>
+      </div>
+      <div class="dropdown-item" id="menu-clear">
+        <span class="menu-icon">🗑️</span>
+        <span class="menu-text">Clear Terminal</span>
+        <span class="menu-shortcut">Ctrl+K</span>
+      </div>
+      <div class="dropdown-separator"></div>
+      <div class="dropdown-item" id="menu-send-output">
+        <span class="menu-icon">➤</span>
+        <span class="menu-text">Send Output Now</span>
+      </div>
+      <div class="dropdown-separator"></div>
+      <div class="dropdown-item" id="menu-next-tab">
+        <span class="menu-icon">▶</span>
+        <span class="menu-text">Next Tab</span>
+        <span class="menu-shortcut">Ctrl+Tab</span>
+      </div>
+      <div class="dropdown-item" id="menu-prev-tab">
+        <span class="menu-icon">◀</span>
+        <span class="menu-text">Previous Tab</span>
+        <span class="menu-shortcut">Ctrl+Shift+Tab</span>
+      </div>
+    </div>
+    
+    <!-- Help Menu -->
+    <div id="help-menu" class="dropdown-menu" data-parent="help">
+      <div class="dropdown-item" id="menu-keyboard-shortcuts">
+        <span class="menu-icon">⌨️</span>
+        <span class="menu-text">Keyboard Shortcuts</span>
+      </div>
+      <div class="dropdown-item" id="menu-about">
+        <span class="menu-icon">ℹ️</span>
+        <span class="menu-text">About</span>
       </div>
     </div>
   </div>
@@ -88,6 +152,11 @@
     <div class="context-menu-item" data-action="send-output">
       <span class="menu-icon">➤</span>
       <span class="menu-text">Send Output Now</span>
+    </div>
+    <div class="context-menu-separator"></div>
+    <div class="context-menu-item" data-action="new-tab">
+      <span class="menu-icon">+</span>
+      <span class="menu-text">New Tab</span>
     </div>
   </div>
 

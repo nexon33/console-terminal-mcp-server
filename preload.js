@@ -4,6 +4,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 // Expose API to the renderer process
 contextBridge.exposeInMainWorld('api', {
   // Terminal control
+  createTerminal: () => {
+    return ipcRenderer.invoke('terminal:create');
+  },
   sendTerminalInput: (sessionId, data) => {
     ipcRenderer.send('pty-input', { sessionId, data });
   },
@@ -11,7 +14,7 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.send('terminal-resize', { sessionId, cols, rows });
   },
   closeTerminal: (sessionId) => {
-    ipcRenderer.send('close-window', sessionId);
+    ipcRenderer.send('terminal:close', { sessionId });
   },
   sendCurrentOutput: (sessionId, output) => {
     ipcRenderer.send('terminal-send-current-output', { sessionId, output });
@@ -19,21 +22,10 @@ contextBridge.exposeInMainWorld('api', {
   
   // Settings
   getSettings: () => {
-    // Default settings if not available from main process
-    return {
-      appearance: {
-        fontFamily: 'Consolas, monospace',
-        fontSize: 14,
-        cursorStyle: 'block',
-        cursorBlink: true,
-        theme: 'dark'
-      },
-      terminal: {
-        scrollback: 1000,
-        autoLineHeight: true,
-        enableBell: false
-      }
-    };
+    return ipcRenderer.invoke('settings:get');
+  },
+  setSettings: (settings) => {
+    ipcRenderer.send('settings:set', settings);
   },
   
   // Window control
@@ -55,7 +47,7 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('pty-output', (event, data) => callback(data));
   },
   onTerminalExit: (callback) => {
-    ipcRenderer.on('terminal-exit', (event, exitCode) => callback(exitCode));
+    ipcRenderer.on('terminal-exit', (event, data) => callback(data));
   },
   onSessionId: (callback) => {
     ipcRenderer.on('session-id', (event, sessionId) => callback(sessionId));
