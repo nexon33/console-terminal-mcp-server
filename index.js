@@ -5,13 +5,49 @@ import axios from "axios";
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import stripAnsi from 'strip-ansi';
 import os from 'os';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { fileURLToPath } from 'url';
+import * as lockfile from 'lockfile'; // Changed import
+import logger from './logger.js'; // Assuming logger.js is in the same directory
+
+// console.log = (...args) => logger.info(...args);
+// console.error = (...args) => logger.error(...args);
+// console.warn = (...args) => logger.warn(...args);
+// console.info = (...args) => logger.info(...args);
+// console.debug = (...args) => logger.debug(...args); // Winston's default level is 'info', so 'debug' won't show unless level is changed.
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Helper function to format errors
+function formatErrorResponse(error, sessionId = null) {
+  let errorMessage = 'An unknown error occurred.';
+  let errorSessionId = sessionId;
+
+  if (axios.isAxiosError(error)) {
+    if (error.response) {
+      errorMessage = `API Error: ${error.response.status} - ${error.response.data?.error || error.response.statusText}`;
+      errorSessionId = error.response.data?.sessionId || errorSessionId;
+    } else if (error.request) {
+      errorMessage = `API Request Error: No response received. ${error.message}`;
+    } else {
+      errorMessage = `API Setup Error: ${error.message}`;
+    }
+  } else {
+    errorMessage = `Internal Server Error: ${error.message}`;
+  }
+
+  return {
+    content: [{
+      type: "text", text: `Session ID: ${errorSessionId}\n\n ${errorMessage}`,
+      exitCode: 1
+    }]
+  };
+}
+
 
 // Create MCP server
 let apiBaseUrl = 'http://localhost';
@@ -21,7 +57,7 @@ const port = process.env.PORT || 3000;
 apiBaseUrl += `:${port}`;
 
 // Mutex file path
-const MUTEX_FILE = path.join(os.tmpdir(), 'electron-mcp-mutex');
+const MUTEX_FILE = path.join(os.tmpdir(), 'electron-mcp-mutex.lock');
 
 // Function to check if server is running
 async function isServerRunning() {
@@ -33,48 +69,56 @@ async function isServerRunning() {
   }
 }
 
+// Promisify lockfile methods
+const lock = promisify(lockfile.lock);
+const unlock = promisify(lockfile.unlock);
+
 // Function to acquire mutex
-function acquireMutex() {
+async function acquireMutex() {
   try {
-    // Try to create the mutex file
-    fs.writeFileSync(MUTEX_FILE, process.pid.toString(), { flag: 'wx' });
+    logger.info(`Attempting to acquire mutex for file: ${MUTEX_FILE}`);
+    // Options for lockfile:
+    // wait: time to wait for lock (ms) - e.g., 10 seconds total
+    // stale: time lock is considered stale (ms) - e.g., 5 seconds
+    // retries: number of retries
+    // retryWait: time between retries (ms)
+    const lockOptions = {
+      wait: 10 * 1000,   // Max wait time 10s
+      pollPeriod: 100, // Check every 100ms
+      stale: 5 * 1000,   // Stale after 5s
+      retries: 100,      // Number of retries (100 * 100ms = 10s)
+      retryWait: 100   // Wait 100ms between retries (used if retries is an object, but pollPeriod covers this for simple retries)
+    };
+    await lock(MUTEX_FILE, lockOptions);
+    logger.info('Mutex acquired successfully.');
     return true;
   } catch (error) {
+    logger.error('Failed to acquire mutex:', error.message);
     if (error.code === 'EEXIST') {
-      // Mutex exists, check if process is still running
-      try {
-        const pid = parseInt(fs.readFileSync(MUTEX_FILE, 'utf8'));
-        try {
-          // Try to send signal 0 to check if process exists
-          process.kill(pid, 0);
-          return false; // Process is still running
-        } catch (e) {
-          // Process doesn't exist, we can take the mutex
-          fs.unlinkSync(MUTEX_FILE);
-          return acquireMutex();
-        }
-      } catch (e) {
-        // Can't read mutex file, try to remove it
-        try {
-          fs.unlinkSync(MUTEX_FILE);
-          return acquireMutex();
-        } catch (e) {
-          return false;
-        }
-      }
+      logger.error('Lock file already exists.');
     }
     return false;
   }
 }
 
 // Function to release mutex
-function releaseMutex() {
+async function releaseMutex() {
   try {
+    // lockfile.unlock will throw if the file doesn't exist or isn't a lock file.
+    // It's generally better to just attempt unlock and catch errors.
+    // However, to maintain similar logging:
     if (fs.existsSync(MUTEX_FILE)) {
-      fs.unlinkSync(MUTEX_FILE);
+      logger.info(`Attempting to release mutex for file: ${MUTEX_FILE}`);
+      await unlock(MUTEX_FILE);
+      logger.info('Mutex released successfully.');
+    } else {
+      // This case might not be strictly necessary if acquireMutex always creates one.
+      // And if it doesn't exist, unlock would fail anyway.
+      logger.info(`Mutex file ${MUTEX_FILE} not found, no release needed or already released.`);
     }
   } catch (error) {
-    console.error('Error releasing mutex:', error);
+    logger.error('Error releasing mutex:', error.message);
+    // Common errors: ENOENT (file not found), EPERM (not owner)
   }
 }
 
@@ -83,8 +127,8 @@ function releaseMutex() {
 async function startElectronProcess() {
   try {
     // Try to acquire mutex
-    if (!acquireMutex()) {
-      console.error('Electron process is already running');
+    if (!(await acquireMutex())) {
+      logger.error('Electron process is already running or failed to acquire mutex.');
       return;
     }
 
@@ -101,7 +145,7 @@ async function startElectronProcess() {
       NODE_ENV: 'development'
     };
 
-    console.error('Starting Electron process');
+    logger.error('Starting Electron process');
 
     // Use npx to run electron, hiding the window with windowsHide and shell: true
     // Corrected spawn call: path.resolve(__dirname) is now an argument to electronPath
@@ -117,21 +161,21 @@ async function startElectronProcess() {
 
     // Log any output from the electron process
     electronProcess.stdout.on('data', (data) => {
-      console.error('Electron stdout:', data.toString());
+      logger.error('Electron stdout:', data.toString());
     });
 
     electronProcess.stderr.on('data', (data) => {
-      console.error('Electron stderr:', data.toString());
+      logger.error('Electron stderr:', data.toString());
     });
 
-    electronProcess.on('error', (error) => {
-      console.error('Failed to start Electron:', error);
-      releaseMutex();
+    electronProcess.on('error', async (error) => {
+      logger.error('Failed to start Electron:', error);
+      await releaseMutex();
     });
 
-    electronProcess.on('exit', (code, signal) => {
-      console.error(`Electron process exited with code ${code} and signal ${signal}`);
-      releaseMutex();
+    electronProcess.on('exit', async (code, signal) => {
+      logger.error(`Electron process exited with code ${code} and signal ${signal}`);
+      await releaseMutex();
     });
 
     // Don't unref the process immediately to ensure it starts properly
@@ -147,23 +191,23 @@ async function startElectronProcess() {
       const checkServer = async () => {
         try {
           if (await isServerRunning()) {
-            console.error('Server is now running');
+            logger.error('Server is now running');
             resolve();
           } else {
             attempts++;
-            console.error(`Waiting for server to start... (attempt ${attempts}/${maxAttempts})`);
+            logger.error(`Waiting for server to start... (attempt ${attempts}/${maxAttempts})`);
             if (attempts >= maxAttempts) {
-              releaseMutex();
+              await releaseMutex();
               reject(new Error('Server failed to start within timeout period'));
               return;
             }
             setTimeout(checkServer, 1000);
           }
         } catch (error) {
-          console.error('Error checking server status:', error);
+          logger.error('Error checking server status:', error);
           attempts++;
           if (attempts >= maxAttempts) {
-            releaseMutex();
+            await releaseMutex();
             reject(new Error('Server failed to start within timeout period'));
             return;
           }
@@ -173,11 +217,38 @@ async function startElectronProcess() {
       checkServer();
     });
   } catch (error) {
-    console.error('Failed to start Electron process:', error);
-    releaseMutex();
+    logger.error('Failed to start Electron process:', error);
+    await releaseMutex();
     throw error;
   }
 }
+
+// Ensure mutex is released on process exit
+process.on('exit', async () => {
+  await releaseMutex();
+});
+
+process.on('SIGINT', async () => {
+  await releaseMutex();
+  process.exit();
+});
+
+process.on('SIGTERM', async () => {
+  await releaseMutex();
+  process.exit();
+});
+
+process.on('uncaughtException', async (err) => {
+  logger.error('Uncaught exception:', err);
+  await releaseMutex();
+  process.exit(1);
+});
+
+process.on('unhandledRejection', async (reason, promise) => {
+  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  await releaseMutex();
+  process.exit(1);
+});
 
 // Create MCP server
 const server = new McpServer({
@@ -201,8 +272,8 @@ server.tool(
       // Create a new session
       const response = await axios.post(`${apiBaseUrl}/execute`, { command });
       const result = response.data;
-      // Clean up terminal output by removing ANSI escape sequences
-      const cleanOutput = result.output.replace(/\x1B\[[0-9;]*[JKmsu]/g, '');
+      // Clean up terminal output using strip-ansi
+      const cleanOutput = stripAnsi(result.output);
       return {
         content: [{
           type: "text",
@@ -212,13 +283,7 @@ server.tool(
         //sessionId: result.sessionId
       };
     } catch (error) {
-      const errorSessionId = error.response?.data?.sessionId || null;
-      return {
-        content: [{
-          type: "text", text: `Session ID: ${errorSessionId}\n\n ${error.response?.data?.error || error.message}`,
-          exitCode: 1
-        }]
-      };
+      return formatErrorResponse(error);
     }
   }
 );
@@ -246,8 +311,8 @@ server.tool(
       //}
 
       const result = response.data;
-      // Clean up terminal output by removing ANSI escape sequences
-      const cleanOutput = result.output.replace(/\x1B\[[0-9;]*[JKmsu]/g, '');
+      // Clean up terminal output using strip-ansi
+      const cleanOutput = stripAnsi(result.output);
       return {
         content: [{
           type: "text",
@@ -257,13 +322,7 @@ server.tool(
 
       };
     } catch (error) {
-      const errorSessionId = error.response?.data?.sessionId || sessionId || null;
-      return {
-        content: [{
-          type: "text", text: `Session ID: ${result.sessionId}\n\n ${error.response?.data?.error || error.message}`,
-          exitCode: 1
-        }]
-      };
+      return formatErrorResponse(error, sessionId);
     }
   }
 );
@@ -283,8 +342,8 @@ server.tool(
 
       const response = await axios.get(`${apiBaseUrl}/output/${sessionId}`);
       const result = response.data;
-      // Clean up terminal output by removing ANSI escape sequences
-      const cleanOutput = result.output.replace(/\x1B\[[0-9;]*[JKmsu]/g, '');
+      // Clean up terminal output using strip-ansi
+      const cleanOutput = stripAnsi(result.output);
       return {
         content: [{
           type: "text", text: `Session ID: ${result.sessionId}\n\n ${cleanOutput}`,
@@ -292,13 +351,7 @@ server.tool(
         }]
       };
     } catch (error) {
-      const errorSessionId = error.response?.data?.sessionId || sessionId;
-      return {
-        content: [{
-          type: "text", text: `Session ID: ${result.sessionId}\n\n ${error.response?.data?.error || error.message}`,
-          exitCode: 1
-        }]
-      };
+      return formatErrorResponse(error, sessionId);
     }
   }
 );
@@ -325,13 +378,7 @@ server.tool(
         }]
       };
     } catch (error) {
-      const errorSessionId = error.response?.data?.sessionId || sessionId;
-      return {
-        content: [{
-          type: "text", text: `Session ID: ${result.sessionId}\n\n ${error.response?.data?.error || error.message}`,
-          exitCode: 1
-        }]
-      };
+      return formatErrorResponse(error, sessionId);
     }
   }
 );
@@ -357,12 +404,7 @@ server.tool(
         }]
       };
     } catch (error) {
-      return {
-        content: [{
-          type: "text", text: `Error fetching sessions: ${error.message}`,
-          exitCode: 1
-        }]
-      };
+      return formatErrorResponse(error);
     }
   }
 );
