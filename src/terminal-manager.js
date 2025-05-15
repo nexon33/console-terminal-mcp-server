@@ -423,6 +423,40 @@ class TerminalManager {
     logger.info('[TM] Finished cleaning up all terminal sessions.');
   }
 
+  writeCommandToSession(sessionId, command) {
+    const session = this.terminals.get(sessionId);
+    if (!session) {
+      logger.error(`[TM] writeCommandToSession: Session ${sessionId} not found.`);
+      throw new Error(`Session ${sessionId} not found`);
+    }
+    if (!session.process) {
+      logger.error(`[TM] writeCommandToSession: Process for session ${sessionId} is not active.`);
+      throw new Error(`Process for session ${sessionId} is not active`);
+    }
+
+    try {
+      if (session.isWindows) {
+        // For subsequent commands in an existing PowerShell session,
+        // we assume __exitmark function is already defined by createTerminalProcess.
+        // If not, it might need to be redefined or ensured it persists.
+        session.process.write(`${command}\r`);
+        session.process.write(SHELL_COMMANDS.WIN32_EMIT_EXIT_MARK);
+      } else {
+        session.process.write(`${command}\r`);
+        // Using the invisible version for subsequent commands to keep PTY clean.
+        session.process.write(SHELL_COMMANDS.UNIX_EMIT_EXIT_CODE_INVISIBLE);
+      }
+      logger.info(`[TM] Successfully wrote command to session ${sessionId}: ${command}`);
+    } catch (writeError) {
+      logger.error(`[TM] Error writing command to terminal for session ${sessionId}:`, writeError);
+      session.status = 'error'; // Mark session as error
+      session.exitCode = EXIT_CODES.GENERAL_ERROR;
+      // No need to throw here as the waitForCommandCompletion will likely handle the error state or timeout.
+      // However, the API might want to return an immediate error if write fails critically.
+      // For now, log and let completion handling take over.
+    }
+  }
+
   async waitForCommandCompletion(sessionId) {
     const session = this.terminals.get(sessionId);
 
