@@ -11,12 +11,13 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { fileURLToPath } from 'url';
 import * as lockfile from 'lockfile'; // Changed import
+import logger from './logger.js'; // Assuming logger.js is in the same directory
 
-console.log = (...args) => logger.info(...args);
-console.error = (...args) => logger.error(...args);
-console.warn = (...args) => logger.warn(...args);
-console.info = (...args) => logger.info(...args);
-console.debug = (...args) => logger.debug(...args); // Winston's default level is 'info', so 'debug' won't show unless level is changed.
+// console.log = (...args) => logger.info(...args);
+// console.error = (...args) => logger.error(...args);
+// console.warn = (...args) => logger.warn(...args);
+// console.info = (...args) => logger.info(...args);
+// console.debug = (...args) => logger.debug(...args); // Winston's default level is 'info', so 'debug' won't show unless level is changed.
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
