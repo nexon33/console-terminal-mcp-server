@@ -304,11 +304,20 @@ export function animateFeedbackMessageHide(feedbackElement, onComplete) {
  * @param {() => void} onComplete Callback when all transitions are complete and new terminal is active.
  */
 export function animateTerminalActivation(newTerminalContainer, oldTerminalContainer, onComplete) {
+    // Early exit if the new terminal container doesn't exist yet
+    if (!newTerminalContainer) {
+        console.warn('Terminal activation attempted with null container');
+        if (onComplete) onComplete();
+        return;
+    }
+
     const transitionDuration = 150; // ms, should match CSS transition-duration for terminals.
 
     const completeActivation = () => {
-        newTerminalContainer.classList.remove('terminal-fade-in-active'); // Clean up animation class
-        newTerminalContainer.classList.add('active'); // Ensure final active state
+        if (newTerminalContainer) {
+            newTerminalContainer.classList.remove('terminal-fade-in-active'); // Clean up animation class
+            newTerminalContainer.classList.add('active'); // Ensure final active state
+        }
         if (onComplete) {
             onComplete();
         }
@@ -333,10 +342,16 @@ export function animateTerminalActivation(newTerminalContainer, oldTerminalConta
             oldTerminalContainer.classList.remove('terminal-fade-out-active'); // Clean up
             oldTerminalContainer.style.display = 'none'; // Hide it properly after fade out
 
-            // Start fade in of new terminal
-            newTerminalContainer.classList.remove('terminal-fade-in-prepare');
-            triggerAnimation(newTerminalContainer, 'terminal-fade-in-active', completeActivation);
-            // 'terminal-fade-in-active' should trigger opacity:1
+            // Start fade in of new terminal (add safety check)
+            if (newTerminalContainer && newTerminalContainer.parentNode) {
+                newTerminalContainer.classList.remove('terminal-fade-in-prepare');
+                triggerAnimation(newTerminalContainer, 'terminal-fade-in-active', completeActivation);
+                // 'terminal-fade-in-active' should trigger opacity:1
+            } else {
+                // Terminal disappeared or was removed during transition
+                console.warn('Terminal container disappeared during activation');
+                completeActivation();
+            }
         };
         oldTerminalContainer.addEventListener('transitionend', oldTerminalListener);
         
@@ -355,7 +370,13 @@ export function animateTerminalActivation(newTerminalContainer, oldTerminalConta
         newTerminalContainer.style.display = 'block'; // Make sure it's not display:none
         
         requestAnimationFrame(() => { // Ensure preparation styles are applied
-            triggerAnimation(newTerminalContainer, 'terminal-fade-in-active', completeActivation);
+            // Safety check in case the element was removed from DOM during the animation frame delay
+            if (newTerminalContainer && newTerminalContainer.parentNode) {
+                triggerAnimation(newTerminalContainer, 'terminal-fade-in-active', completeActivation);
+            } else {
+                console.warn('Terminal container disappeared before animation');
+                completeActivation();
+            }
         });
     }
 }

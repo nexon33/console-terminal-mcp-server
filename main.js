@@ -244,11 +244,17 @@ function createOrShowMainWindow() {
   
   // Show window when ready to avoid flashing
   mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-    // Additional check to ensure menu is hidden on Windows
-    if (process.platform === 'win32') {
-      mainWindow.setMenuBarVisibility(false);
-    }
+    // Slight delay before showing window to ensure complete initialization
+    setTimeout(() => {
+      mainWindow.show();
+      // Additional check to ensure menu is hidden on Windows
+      if (process.platform === 'win32') {
+        mainWindow.setMenuBarVisibility(false);
+      }
+      
+      // Send window-ready event to renderer
+      mainWindow.webContents.send('window-ready');
+    }, 100);
   });
   
   // Handle window close

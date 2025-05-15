@@ -35,6 +35,11 @@
                      border-color var(--animation-duration-normal) ease,
                      fill var(--animation-duration-normal) ease,
                      stroke var(--animation-duration-normal) ease;
+  --tab-inactive-dim: #232323;
+  --tab-inactive-loading: #292929;
+  --accent-color-dim: rgba(88, 166, 255, 0.3);
+  --accent-color-hover: #4d8edb;
+  --error-color: #e74c3c;
 }
 
 /* Themes */
@@ -410,8 +415,11 @@ body {
   flex-grow: 1;
   position: relative;
   overflow: hidden;
-  background-color: var(--background);
-  transition: background-color var(--transition-speed) ease;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--terminal-bg);
+  width: 100%;
+  height: 100%;
 }
 
 .terminal-instance {
@@ -420,18 +428,17 @@ body {
   left: 0;
   width: 100%;
   height: 100%;
+  box-sizing: border-box;
   padding: 6px;
+  transition: opacity 0.2s ease-in-out, visibility 0.2s ease-in-out;
   display: none;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity var(--animation-duration-fast) ease-in-out;
 }
 
 .terminal-instance.active {
-  display: block;
-  opacity: 1;
-  visibility: visible;
-  z-index: 1;
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  z-index: 2;
 }
 
 /* Make the terminal fill its container */
@@ -1193,16 +1200,17 @@ input:not(:checked) + .toggle-slider:before {
 .terminal-fade-in-active {
   opacity: 1 !important;
   visibility: visible !important;
-  /* Transition is on .terminal-instance */
+  display: block !important;
+  z-index: 2;
+  transition: opacity 0.2s ease-in-out;
 }
 
 /* Class to trigger fade-out animation */
 .terminal-fade-out-active {
   opacity: 0 !important;
-  visibility: hidden !important; /* Hide after transition */
-  z-index: 0; /* Send to back */
-  transition: opacity var(--animation-duration-fast) ease-in-out, 
-              visibility 0s linear var(--animation-duration-fast); /* Hide immediately after opacity transition */
+  visibility: visible !important;
+  z-index: 0;
+  transition: opacity 0.2s ease-in-out;
 }
 
 /* Theme Transition */
@@ -1280,4 +1288,111 @@ body.theme-transition-active #search-panel
 .terminal-error-placeholder .retry-terminal-error-btn:hover,
 .terminal-error-placeholder .retry-generic-error-btn:hover {
   background-color: var(--accent-hover);
+}
+
+/* Add loading indicator animation for tabs */
+.loading-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid transparent;
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-left: 4px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Enhanced loading states for tabs */
+.tab.loading-tab {
+  background-color: var(--tab-inactive-dim);
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.tab.loading-tab.loading-extended {
+  background-color: var(--tab-inactive-loading);
+  box-shadow: 0 0 4px var(--accent-color-dim);
+}
+
+/* Terminal fade animations */
+.terminal-instance {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transition: opacity 0.15s ease-in-out, visibility 0.15s ease-in-out;
+  display: none;
+}
+
+.terminal-instance.active {
+  display: block;
+  opacity: 1;
+  visibility: visible;
+  z-index: 2;
+}
+
+.terminal-fade-in-prepare {
+  opacity: 0 !important;
+  visibility: visible !important;
+  display: block !important;
+  z-index: 1;
+}
+
+.terminal-fade-in-active {
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+  z-index: 2;
+}
+
+.terminal-fade-out-active {
+  opacity: 0 !important;
+  visibility: visible !important; /* Keep visible while fading */
+  z-index: 0;
+}
+
+/* Terminal placeholder for error states */
+.terminal-error-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 20px;
+  text-align: center;
+  color: var(--text-color);
+  background-color: var(--terminal-bg);
+}
+
+.terminal-error-placeholder h3 {
+  margin-bottom: 15px;
+  color: var(--error-color);
+}
+
+.terminal-error-placeholder p {
+  margin-bottom: 20px;
+  max-width: 500px;
+}
+
+.terminal-error-placeholder button {
+  padding: 8px 16px;
+  background-color: var(--accent-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s ease;
+}
+
+.terminal-error-placeholder button:hover {
+  background-color: var(--accent-color-hover);
+}
+
+.terminal-error-placeholder button:active {
+  transform: scale(0.98);
 }

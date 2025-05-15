@@ -82,5 +82,10 @@ contextBridge.exposeInMainWorld('api', {
   // Custom menu handling
   onAltKeyPressed: (callback) => {
     ipcRenderer.on('alt-key-pressed', () => callback());
+  },
+  
+  // Window ready event
+  onWindowReady: (callback) => {
+    ipcRenderer.on('window-ready', () => callback());
   }
 });

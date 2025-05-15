@@ -123,7 +123,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Add loading indicator to tab bar
     const tabsContainer = document.getElementById('tabs');
     const loadingTab = document.createElement('div');
-    loadingTab.className = 'tab';
+    loadingTab.className = 'tab loading-tab';  // Added loading-tab class for styling
     loadingTab.innerHTML = `
       <span class="tab-title">Loading...</span>
       <div class="loading-spinner"></div>
@@ -133,7 +133,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Request a new terminal from the main process
     const attemptCreation = () => {
+      // Track if this creation attempt is still valid (not already handled or aborted)
+      let creationAttemptValid = true;
+      
+      // If the attempt takes too long, show a more visible loading state
+      const loadingTimeout = setTimeout(() => {
+        if (creationAttemptValid && loadingTab.parentNode) {
+          loadingTab.classList.add('loading-extended');
+        }
+      }, 1000);
+      
       window.api.createTerminal().then(sessionIdOrError => {
+        // Clear the timeout first
+        clearTimeout(loadingTimeout);
+        
+        // Check if this creation attempt is still relevant
+        if (!creationAttemptValid) return;
+        creationAttemptValid = false;
+        
+        // Remove loading tab if it still exists
         if (loadingTab.parentNode) {
           loadingTab.parentNode.removeChild(loadingTab);
         }
@@ -157,136 +175,283 @@ document.addEventListener('DOMContentLoaded', async () => {
           errorHandler.logError('Error creating terminal', { initialError: sessionIdOrError });
           return; 
         }
-        createTerminalForSession(sessionIdOrError);
+        
+        // If session ID is valid, create the terminal
+        if (sessionIdOrError && typeof sessionIdOrError === 'string') {
+          createTerminalForSession(sessionIdOrError);
+        } else {
+          errorHandler.showError('Invalid session ID received', 'error');
+        }
       }).catch(err => {
+        // Clear the timeout
+        clearTimeout(loadingTimeout);
+        
+        // Mark attempt as invalid
+        creationAttemptValid = false;
+        
+        // Clean up loading tab
         if (loadingTab.parentNode) {
           loadingTab.parentNode.removeChild(loadingTab);
         }
+        
         errorHandler.showSystemError(null, 'Failed to communicate with main process for new terminal.');
         errorHandler.logError('Error creating terminal via API', { originalError: err });
+        
+        // If no terminals exist, show a placeholder with retry button
+        if (Object.keys(terminals).length === 0) {
+          const terminalsContainer = document.getElementById('terminals-container');
+          errorHandler.createGenericErrorPlaceholder(
+            terminalsContainer,
+            'Failed to connect to terminal service. Please try again.',
+            () => createNewTerminal()
+          );
+        }
       });
     };
+    
+    // Start terminal creation process
     attemptCreation();
   }
   
   // Create a terminal for a session ID
   function createTerminalForSession(sessionId) {
     // Skip if this terminal already exists
-    if (terminals[sessionId]) return;
+    if (terminals[sessionId]) {
+      console.log(`Terminal for session ${sessionId} already exists, reusing`);
+      setActiveTerminal(sessionId);
+      return;
+    }
     
-    // Create a terminal container
-    const terminalContainer = document.createElement('div');
-    terminalContainer.id = `terminal-${sessionId}`;
-    terminalContainer.className = 'terminal-instance';
-    document.getElementById('terminals-container').appendChild(terminalContainer);
-    
-    // Get terminal settings from localStorage
-    const fontFamily = localStorage.getItem('fontFamily') || 'Consolas, "Cascadia Mono", "Source Code Pro", monospace';
-    const cursorStyle = localStorage.getItem('cursorStyle') || 'block';
-    const cursorBlink = localStorage.getItem('cursorBlink') !== 'false';
-    const scrollback = parseInt(localStorage.getItem('scrollback') || '5000');
-    const allowTransparency = localStorage.getItem('allowTransparency') !== 'false';
-    const rendererType = localStorage.getItem('rendererType') || 'canvas';
-    const macOptionIsMeta = localStorage.getItem('macOptionIsMeta') !== 'false';
-    const wordSeparator = localStorage.getItem('wordSeparator') || ' ()[]{}\'",.;:';
-    
-    // Create the xterm.js instance
-    const term = new Terminal({
-      fontFamily: fontFamily,
-      fontSize: currentFontSize,
-      cursorStyle: cursorStyle,
-      cursorBlink: cursorBlink,
-      theme: themes[currentTheme],
-      scrollback: scrollback,
-      allowTransparency: allowTransparency,
-      convertEol: true,
-      disableStdin: false,
-      smoothScrollDuration: 300,
-      rightClickSelectsWord: localStorage.getItem('rightClickBehavior') === 'select',
-      macOptionIsMeta: macOptionIsMeta,
-      rendererType: rendererType,
-      allowProposedApi: true,
-      wordSeparator: wordSeparator
-    });
-    
-    // Create addons
-    const fitAddon = new FitAddon.FitAddon();
-    const searchAddon = new SearchAddon.SearchAddon();
-    const webLinksAddon = new WebLinksAddon.WebLinksAddon();
-    const serializeAddon = new SerializeAddon.SerializeAddon();
-    
-    // Load addons
-    term.loadAddon(fitAddon);
-    term.loadAddon(searchAddon);
-    term.loadAddon(webLinksAddon);
-    term.loadAddon(serializeAddon);
-    
-    // Open the terminal
-    term.open(terminalContainer);
-    
-    // Store terminal info
-    terminals[sessionId] = {
-      term,
-      fitAddon,
-      searchAddon,
-      serializeAddon,
-      container: terminalContainer,
-      sessionId,
-      title: 'Terminal',
-      exited: false
-    };
-    
-    // Set up terminal events
-    term.onData(data => {
-      if (sessionId) {
-        window.api.sendTerminalInput(sessionId, data);
-      }
-    });
-    
-    // Handle copy on select if enabled
-    term.onSelectionChange(() => {
-      const copyOnSelect = localStorage.getItem('copyOnSelect') === 'true';
-      if (copyOnSelect && term.hasSelection()) {
-        const selection = term.getSelection();
-        navigator.clipboard.writeText(selection);
-      }
-    });
-    
-    term.onResize(({ cols, rows }) => {
-      if (sessionId) {
-        window.api.resizeTerminal(sessionId, cols, rows);
+    try {
+      console.log(`Creating new terminal for session ${sessionId}`);
+      
+      // Check if this is the first terminal being created
+      const isFirstTerminal = Object.keys(terminals).length === 0;
+      console.log(`Is first terminal: ${isFirstTerminal}`);
+      
+      // Create a terminal container
+      const terminalContainer = document.createElement('div');
+      terminalContainer.id = `terminal-${sessionId}`;
+      terminalContainer.className = 'terminal-instance';
+      terminalContainer.setAttribute('data-session-id', sessionId);
+      
+      // Get the container element
+      const terminalsContainer = document.getElementById('terminals-container');
+      if (!terminalsContainer) {
+        throw new Error("Terminal container element not found");
       }
       
-      if (sessionId === activeTerminalId) {
-        document.getElementById('terminal-size').textContent = `${cols}×${rows}`;
+      // Add to DOM but with different strategy for first terminal
+      if (isFirstTerminal) {
+        // For first terminal, make it visible and active immediately to avoid glitches
+        terminalContainer.style.opacity = '1';
+        terminalContainer.style.visibility = 'visible';
+        terminalContainer.style.display = 'block';
+        terminalContainer.classList.add('active');
+      } else {
+        // For subsequent terminals, use the standard hidden approach
+        terminalContainer.style.opacity = '0';
+        terminalContainer.style.visibility = 'hidden';
       }
-    });
-    
-    // Add custom title detection
-    term.onTitleChange(title => {
-      if (title && title.trim()) {
-        updateTabTitle(sessionId, title.trim());
-      }
-    });
-    
-    // Create a tab for this terminal
-    createTab(sessionId);
-    
-    // Set as active terminal
-    setActiveTerminal(sessionId);
-    
-    // Initial fit
-    setTimeout(() => {
-      fitAddon.fit();
-      const { cols, rows } = term;
-      window.api.resizeTerminal(sessionId, cols, rows);
       
-      if (sessionId === activeTerminalId) {
-        document.getElementById('terminal-size').textContent = `${cols}×${rows}`;
+      terminalContainer.style.position = 'absolute';
+      terminalContainer.style.width = '100%';
+      terminalContainer.style.height = '100%';
+      
+      // Append to container
+      terminalsContainer.appendChild(terminalContainer);
+      
+      // Wait a frame to ensure container is in DOM
+      requestAnimationFrame(() => {
+        try {
+          // Get terminal settings from localStorage
+          const fontFamily = localStorage.getItem('fontFamily') || 'Consolas, "Cascadia Mono", "Source Code Pro", monospace';
+          const cursorStyle = localStorage.getItem('cursorStyle') || 'block';
+          const cursorBlink = localStorage.getItem('cursorBlink') !== 'false';
+          const scrollback = parseInt(localStorage.getItem('scrollback') || '5000');
+          const allowTransparency = localStorage.getItem('allowTransparency') !== 'false';
+          const rendererType = localStorage.getItem('rendererType') || 'canvas';
+          const macOptionIsMeta = localStorage.getItem('macOptionIsMeta') !== 'false';
+          const wordSeparator = localStorage.getItem('wordSeparator') || ' ()[]{}\'",.;:';
+          
+          // Create the xterm.js instance
+          console.log(`Initializing xterm.js for session ${sessionId}`);
+          const term = new Terminal({
+            fontFamily: fontFamily,
+            fontSize: currentFontSize,
+            cursorStyle: cursorStyle,
+            cursorBlink: cursorBlink,
+            theme: themes[currentTheme],
+            scrollback: scrollback,
+            allowTransparency: allowTransparency,
+            rendererType: rendererType,
+            macOptionIsMeta: macOptionIsMeta,
+            wordSeparator: wordSeparator,
+            disableStdin: false,
+            cursorInactiveStyle: 'outline',
+            convertEol: true
+          });
+          
+          // Load addons
+          const fitAddon = new FitAddon.FitAddon();
+          const searchAddon = new SearchAddon.SearchAddon();
+          const webLinksAddon = new WebLinksAddon.WebLinksAddon();
+          const serializeAddon = new SerializeAddon.SerializeAddon();
+          
+          // Load addons
+          term.loadAddon(fitAddon);
+          term.loadAddon(searchAddon);
+          term.loadAddon(webLinksAddon);
+          term.loadAddon(serializeAddon);
+          
+          // Open the terminal - ensure this happens after container is in DOM
+          console.log(`Opening terminal for session ${sessionId}`);
+          try {
+            term.open(terminalContainer);
+          } catch (openError) {
+            console.error(`Error opening terminal for session ${sessionId}:`, openError);
+            throw openError;
+          }
+          
+          // Store terminal info
+          terminals[sessionId] = {
+            term,
+            fitAddon,
+            searchAddon,
+            serializeAddon,
+            container: terminalContainer,
+            sessionId,
+            title: 'Terminal',
+            exited: false
+          };
+          
+          // Set up terminal events
+          term.onData(data => {
+            if (sessionId) {
+              window.api.sendTerminalInput(sessionId, data);
+            }
+          });
+          
+          // Handle copy on select if enabled
+          term.onSelectionChange(() => {
+            const copyOnSelect = localStorage.getItem('copyOnSelect') === 'true';
+            if (copyOnSelect && term.hasSelection()) {
+              const selection = term.getSelection();
+              navigator.clipboard.writeText(selection);
+            }
+          });
+          
+          term.onResize(({ cols, rows }) => {
+            if (sessionId) {
+              window.api.resizeTerminal(sessionId, cols, rows);
+            }
+            
+            if (sessionId === activeTerminalId) {
+              document.getElementById('terminal-size').textContent = `${cols}×${rows}`;
+            }
+          });
+          
+          // Add custom title detection
+          term.onTitleChange(title => {
+            if (title && title.trim()) {
+              updateTabTitle(sessionId, title.trim());
+            }
+          });
+          
+          // Create a tab for this terminal
+          createTab(sessionId);
+          
+          // Different activation strategy based on whether it's the first terminal
+          if (isFirstTerminal) {
+            console.log(`First terminal - applying special initialization for ${sessionId}`);
+            // Set active ID immediately
+            activeTerminalId = sessionId;
+            
+            // Update UI to reflect active state
+            updateTabUI(sessionId);
+            updateTerminalInfo(sessionId);
+            
+            // Fit the terminal immediately to avoid display issues
+            try {
+              console.log(`Immediately fitting first terminal ${sessionId}`);
+              fitAddon.fit();
+              const { cols, rows } = term;
+              window.api.resizeTerminal(sessionId, cols, rows);
+              document.getElementById('terminal-size').textContent = `${cols}×${rows}`;
+              
+              // Focus the terminal
+              term.focus();
+            } catch (fitError) {
+              console.error(`First terminal fit error: ${fitError.message}`);
+            }
+          } else {
+            // For subsequent terminals, use the standard approach with animations
+            console.log(`Making terminal visible for session ${sessionId}`);
+            terminalContainer.style.opacity = '';
+            terminalContainer.style.visibility = '';
+            terminalContainer.style.display = 'block';
+            
+            // Set as active terminal after a short delay to ensure rendering
+            console.log(`Setting terminal active for session ${sessionId}`);
+            setTimeout(() => {
+              if (terminals[sessionId]) {
+                setActiveTerminal(sessionId);
+                
+                // Initial fit after terminal is active and visible
+                setTimeout(() => {
+                  if (terminals[sessionId] && terminals[sessionId].fitAddon) {
+                    try {
+                      console.log(`Fitting terminal for session ${sessionId}`);
+                      terminals[sessionId].fitAddon.fit();
+                      const { cols, rows } = terminals[sessionId].term;
+                      window.api.resizeTerminal(sessionId, cols, rows);
+                      
+                      if (sessionId === activeTerminalId) {
+                        document.getElementById('terminal-size').textContent = `${cols}×${rows}`;
+                      }
+                    } catch (fitError) {
+                      console.error(`Error fitting terminal for session ${sessionId}:`, fitError);
+                    }
+                  }
+                }, 100);
+              }
+            }, 50);
+          }
+          
+          return terminals[sessionId];
+        } catch (err) {
+          console.error(`Error initializing terminal for session ${sessionId}:`, err);
+          errorHandler.showError(`Failed to initialize terminal: ${err.message}`, 'error');
+          
+          // Clean up the container if it exists
+          if (terminalContainer && terminalContainer.parentNode) {
+            terminalContainer.parentNode.removeChild(terminalContainer);
+          }
+          throw err;
+        }
+      });
+    } catch (err) {
+      errorHandler.showError(`Failed to create terminal: ${err.message}`, 'error');
+      errorHandler.logError('Error in createTerminalForSession', { sessionId, error: err });
+      
+      // Clean up any partial terminal elements that might have been created
+      const container = document.getElementById(`terminal-${sessionId}`);
+      if (container && container.parentNode) {
+        container.parentNode.removeChild(container);
       }
-    }, 100);
-    
-    return terminals[sessionId];
+      
+      const tab = document.getElementById(`tab-${sessionId}`);
+      if (tab && tab.parentNode) {
+        tab.parentNode.removeChild(tab);
+      }
+      
+      // Remove from terminals object if it was partially added
+      if (terminals[sessionId]) {
+        delete terminals[sessionId];
+      }
+      
+      return null;
+    }
   }
   
   // Create a tab for a terminal
@@ -389,33 +554,81 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Set the active terminal with animation
   function setActiveTerminal(sessionId) {
-    if (!terminals[sessionId] || activeTerminalId === sessionId) return;
+    // Validate session ID and ensure terminal exists
+    if (!sessionId || !terminals[sessionId]) {
+      console.warn(`Attempted to activate invalid terminal: ${sessionId}`);
+      return;
+    }
 
-    const newTerminalContainer = terminals[sessionId].container;
-    const oldTerminalContainer = activeTerminalId ? terminals[activeTerminalId]?.container : null;
+    // Skip if this terminal is already active
+    if (activeTerminalId === sessionId) {
+      console.log(`Terminal ${sessionId} is already active.`);
+      return;
+    }
 
+    // Get terminal containers
+    const newTerminalContainer = terminals[sessionId]?.container;
+    const oldTerminalId = activeTerminalId;
+    const oldTerminalContainer = oldTerminalId ? terminals[oldTerminalId]?.container : null;
+    
+    // Validate that terminal container exists
+    if (!newTerminalContainer) {
+      console.error(`Terminal container not found for session ${sessionId}`);
+      return;
+    }
+
+    // If old terminal doesn't exist anymore, just activate the new one directly
+    if (oldTerminalId && !oldTerminalContainer) {
+      console.warn(`Previous active terminal container (${oldTerminalId}) not found, doing direct activation`);
+      
+      // Set active terminal directly
+      activeTerminalId = sessionId;
+      
+      // Update the tab UI
+      updateTabUI(sessionId);
+      
+      // Make sure terminal is visible
+      newTerminalContainer.style.display = 'block';
+      newTerminalContainer.classList.add('active');
+      
+      // Update info and focus
+      updateTerminalInfo(sessionId);
+      if (terminals[sessionId].term) {
+        terminals[sessionId].term.focus();
+        terminals[sessionId].fitAddon.fit();
+      }
+      
+      return;
+    }
+
+    // Define completion callback for animation
     const completeActivation = () => {
       activeTerminalId = sessionId;
       
-      const tab = document.getElementById(`tab-${sessionId}`);
-      if (tab) {
-        // Ensure all other tabs are not active
-        document.querySelectorAll('.tab.active').forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
-      }
+      // Update tab UI
+      updateTabUI(sessionId);
       
+      // Update terminal info and focus
       updateTerminalInfo(sessionId);
-      terminals[sessionId].term.focus();
-      terminals[sessionId].fitAddon.fit();
+      if (terminals[sessionId] && terminals[sessionId].term) {
+        terminals[sessionId].term.focus();
+        terminals[sessionId].fitAddon.fit();
+      }
     };
 
-    // Deactivate all current tabs first visually
-    document.querySelectorAll('#tabs .tab.active').forEach(activeTab => {
-        activeTab.classList.remove('active');
-    });
-
+    // Animate the terminal activation
     animations.animateTerminalActivation(newTerminalContainer, oldTerminalContainer, completeActivation);
+  }
+  
+  // Helper function to update tab UI when activating a terminal
+  function updateTabUI(sessionId) {
+    const tab = document.getElementById(`tab-${sessionId}`);
+    if (tab) {
+      // Ensure all other tabs are not active
+      document.querySelectorAll('.tab.active').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    }
   }
   
   // Update terminal information in the status bar
@@ -1246,7 +1459,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   `;
     document.head.appendChild(newTabButtonStyle);
     
-    createNewTerminal();
+    // Listen for window-ready event from main process
+    let windowReadyReceived = false;
+    window.api.onWindowReady(() => {
+      console.log("Window is ready, terminal can be safely created");
+      windowReadyReceived = true;
+      createNewTerminal();
+    });
+    
+    // Fallback if window-ready event isn't received
+    setTimeout(() => {
+      if (!windowReadyReceived) {
+        console.log("Window-ready event timeout, creating terminal anyway");
+        createNewTerminal();
+      }
+    }, 500);
   }
   
   // Create a terminal footer with a blue border
