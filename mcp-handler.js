@@ -1,3 +1,4 @@
+import logger from './logger.js';
 import { executeCommand, executeCommandInSession, getCommandOutput, stopCommand } from './llm-client.js'; // Added .js extension
 
 class MCPHandler {
@@ -9,7 +10,7 @@ class MCPHandler {
   // Handle incoming MCP messages
   async handleMessage(message) {
     try {
-      console.log('Handling MCP message:', message);
+      logger.info('Handling MCP message:', message);
       
       if (!message.method) {
         return { 
@@ -36,7 +37,7 @@ class MCPHandler {
           };
       }
     } catch (error) {
-      console.error('Error handling MCP message:', error);
+      logger.error('Error handling MCP message:', error);
       return {
         jsonrpc: "2.0",
         error: { code: -32000, message: `Internal error: ${error.message}` },
@@ -47,7 +48,7 @@ class MCPHandler {
 
   // Handle initialize request
   handleInitialize(message) {
-    console.log('Initializing MCP connection');
+    logger.info('Initializing MCP connection');
     // Reset session tracking on new client connection
     this.activeSessions = new Map();
     this.currentSessionId = null;
@@ -89,7 +90,7 @@ class MCPHandler {
       // If sessionId is provided and active, execute in that session
       if (sid && this.activeSessions.has(sid)) {
         try {
-          console.log(`Executing command in existing session ${sid}: ${command}`);
+          logger.info(`Executing command in existing session ${sid}: ${command}`);
           result = await executeCommandInSession(sid, command);
 
           // Update session tracking on success
@@ -113,7 +114,7 @@ class MCPHandler {
           };
         } catch (sessionError) {
           // If session is not active, create a new one
-          console.log(`Session error: ${sessionError.message}, creating new session`);
+          logger.info(`Session error: ${sessionError.message}, creating new session`);
           result = await executeCommand(command);
           sid = result.sessionId;
           this.activeSessions.set(sid, {
@@ -136,7 +137,7 @@ class MCPHandler {
         }
       } else {
         // No sessionId provided or not active: create a new session
-        console.log(`Creating new session for command: ${command}`);
+        logger.info(`Creating new session for command: ${command}`);
         result = await executeCommand(command);
         sid = result.sessionId;
         this.activeSessions.set(sid, {
@@ -174,7 +175,7 @@ class MCPHandler {
     // If no session ID is provided, use the current session if available
     if (!sessionId && this.currentSessionId) {
       sessionId = this.currentSessionId;
-      console.log(`Using current session ${sessionId} for output request`);
+      logger.info(`Using current session ${sessionId} for output request`);
     }
     
     if (!sessionId) {
@@ -214,7 +215,7 @@ class MCPHandler {
     // If no session ID is provided, use the current session if available
     if (!sessionId && this.currentSessionId) {
       sessionId = this.currentSessionId;
-      console.log(`Using current session ${sessionId} for stop request`);
+      logger.info(`Using current session ${sessionId} for stop request`);
     }
     
     if (!sessionId) {

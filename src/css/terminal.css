@@ -1,0 +1,1398 @@
+/* Terminal CSS */
+:root {
+  --app-bar-height: 38px;
+  --tabs-height: 36px;
+  --status-bar-height: 28px;
+  --accent-color: #007acc;
+  --accent-hover: #1b8bd0;
+  --background-dark: #1a1a1a;
+  --background-light: #f8f9fa;
+  --foreground-dark: #d4d4d4;
+  --foreground-light: #333333;
+  --header-dark: #252526;
+  --header-light: #e4e6eb;
+  --tab-active-dark: #1e1e1e;
+  --tab-active-light: #ffffff;
+  --tab-inactive-dark: #2d2d2d;
+  --tab-inactive-light: #e0e0e0;
+  --border-dark: #444444;
+  --border-light: #dddddd;
+  --dropdown-bg-dark: #323234;
+  --dropdown-bg-light: #f5f5f7;
+  --action-hover-dark: rgba(255, 255, 255, 0.12);
+  --action-hover-light: rgba(0, 0, 0, 0.08);
+  --shadow-dark: rgba(0, 0, 0, 0.5);
+  --shadow-light: rgba(0, 0, 0, 0.15);
+  --font-primary: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  --border-radius: 5px;
+  --transition-speed: 180ms;
+  --tab-transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --animation-duration-fast: 0.15s;
+  --animation-duration-normal: 0.3s;
+  --animation-duration-slow: 0.5s;
+  --main-transition: background-color var(--animation-duration-normal) ease, 
+                     color var(--animation-duration-normal) ease, 
+                     border-color var(--animation-duration-normal) ease,
+                     fill var(--animation-duration-normal) ease,
+                     stroke var(--animation-duration-normal) ease;
+  --tab-inactive-dim: #232323;
+  --tab-inactive-loading: #292929;
+  --accent-color-dim: rgba(88, 166, 255, 0.3);
+  --accent-color-hover: #4d8edb;
+  --error-color: #e74c3c;
+}
+
+/* Themes */
+.theme-dark {
+  --background: var(--background-dark);
+  --foreground: var(--foreground-dark);
+  --header-bg: var(--header-dark);
+  --tab-active: var(--tab-active-dark);
+  --tab-inactive: var(--tab-inactive-dark);
+  --border-color: var(--border-dark);
+  --dropdown-bg: var(--dropdown-bg-dark);
+  --action-hover: var(--action-hover-dark);
+  --shadow: var(--shadow-dark);
+}
+
+.theme-light {
+  --background: var(--background-light);
+  --foreground: var(--foreground-light);
+  --header-bg: var(--header-light);
+  --tab-active: var(--tab-active-light);
+  --tab-inactive: var(--tab-inactive-light);
+  --border-color: var(--border-light);
+  --dropdown-bg: var(--dropdown-bg-light);
+  --action-hover: var(--action-hover-light);
+  --shadow: var(--shadow-light);
+}
+
+/* General Styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-primary);
+  background-color: var(--background);
+  color: var(--foreground);
+  height: 100vh;
+  overflow: hidden;
+  user-select: none;
+  line-height: 1.5;
+  font-size: 14px;
+  transition: background-color var(--transition-speed) ease;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* App Menu Bar - Custom Titlebar */
+.app-menu-bar {
+  height: var(--app-bar-height);
+  background-color: var(--header-bg);
+  display: flex;
+  align-items: center;
+  padding: 0;
+  -webkit-app-region: drag; /* Allow dragging from header */
+  border-bottom: 1px solid var(--border-color);
+  z-index: 20;
+  transition: background-color var(--transition-speed) ease;
+}
+
+.app-menu-section {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  -webkit-app-region: drag; /* Ensure this area is draggable */
+}
+
+.app-icon {
+  margin: 0 10px;
+  color: var(--foreground);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-icon svg {
+  filter: drop-shadow(0 1px 1px var(--shadow));
+}
+
+.flex-spacer {
+  flex-grow: 1;
+  -webkit-app-region: drag; /* Ensure the spacer is draggable too */
+}
+
+/* Menu Items */
+.menu-item {
+  height: 100%;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-size: 13px;
+  -webkit-app-region: no-drag; /* Allow menu clicks */
+  transition: background-color var(--transition-speed) ease;
+  position: relative;
+}
+
+.menu-item:hover {
+  background-color: var(--action-hover);
+}
+
+.menu-item.active {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.menu-item::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  height: 2px;
+  background-color: var(--accent-color);
+  transition: all 0.2s ease;
+  transform: translateX(-50%);
+}
+
+.menu-item:hover::after {
+  width: 50%;
+}
+
+/* Tab Controls */
+.tab-controls {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  -webkit-app-region: no-drag; /* Allow button clicks */
+}
+
+.tab-control-button {
+  background: transparent;
+  border: none;
+  color: var(--foreground);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  outline: none;
+  border-radius: 4px;
+  margin: 0 2px;
+  transition: background-color var(--transition-speed) ease, 
+              transform 0.1s ease;
+}
+
+.tab-control-button:hover {
+  background-color: var(--action-hover);
+}
+
+.tab-control-button:active {
+  transform: scale(0.95);
+}
+
+.tab-control-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Window Controls - Updated for frameless window */
+.window-controls {
+  display: flex;
+  -webkit-app-region: no-drag; /* Allow button clicks */
+  height: 100%;
+  align-items: center;
+}
+
+.window-control {
+  width: 46px;
+  height: var(--app-bar-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  -webkit-app-region: no-drag; /* Explicitly ensure no-drag */
+  transition: background-color var(--transition-speed) ease;
+}
+
+.window-control.minimize:hover {
+  background-color: var(--action-hover);
+}
+
+.window-control.maximize:hover {
+  background-color: var(--action-hover);
+}
+
+.window-control.close:hover {
+  background-color: #e81123;
+}
+
+.window-control.close:hover svg path {
+  stroke: white;
+}
+
+/* Menu Dropdowns */
+.dropdown-menu {
+  position: absolute;
+  top: var(--app-bar-height);
+  background-color: var(--dropdown-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 0 0 var(--border-radius) var(--border-radius);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  min-width: 220px;
+  z-index: 100;
+  display: none;
+  padding: 6px 0;
+  animation: fadeIn 0.15s ease-in-out;
+  backdrop-filter: blur(10px);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.dropdown-menu.show {
+  display: block;
+}
+
+.dropdown-item {
+  padding: 8px 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  position: relative;
+  transition: background-color var(--transition-speed) ease, 
+              color var(--transition-speed) ease;
+}
+
+.dropdown-item:hover {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.dropdown-separator {
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 6px 0;
+  opacity: 0.6;
+}
+
+.menu-text {
+  flex-grow: 1;
+}
+
+.menu-shortcut {
+  margin-left: 16px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.submenu-arrow {
+  font-size: 10px;
+  margin-left: 8px;
+}
+
+/* Submenu positioning */
+.submenu {
+  position: absolute;
+  background-color: var(--dropdown-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 0 var(--border-radius) var(--border-radius) 0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  min-width: 220px;
+  z-index: 101; /* Higher than parent menus */
+  display: none;
+  padding: 6px 0;
+  animation: fadeInRight 0.15s ease-in-out;
+  backdrop-filter: blur(10px);
+}
+
+@keyframes fadeInRight {
+  from { opacity: 0; transform: translateX(-5px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Tabs Bar */
+.tabs {
+  display: flex;
+  height: var(--tabs-height);
+  background-color: var(--header-bg);
+  border-bottom: 1px solid var(--border-color);
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none; /* Firefox */
+  z-index: 10;
+  transition: background-color var(--transition-speed) ease;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge */
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  height: calc(100% - 4px);
+  margin-top: 4px;
+  background-color: var(--tab-inactive);
+  border-right: 1px solid transparent;
+  cursor: pointer;
+  min-width: 140px;
+  max-width: 220px;
+  user-select: none;
+  position: relative;
+  border-top-left-radius: var(--border-radius);
+  border-top-right-radius: var(--border-radius);
+  transition: opacity var(--animation-duration-normal) ease, 
+              transform var(--animation-duration-normal) ease, 
+              background-color 0.2s;
+  margin-left: 4px;
+  box-shadow: 0 0 0 transparent;
+}
+
+.tab.active {
+  background-color: var(--tab-active);
+  height: calc(100% + 1px);
+  box-shadow: 0 0 6px var(--shadow);
+  border-bottom: none;
+  z-index: 1;
+}
+
+.tab-title {
+  flex-grow: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  margin-right: 4px;
+  transition: color var(--transition-speed) ease;
+}
+
+.tab-close {
+  margin-left: 8px;
+  font-size: 16px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color var(--transition-speed) ease;
+  opacity: 0.7;
+}
+
+.tab:hover .tab-close {
+  opacity: 1;
+}
+
+.tab-close:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.new-tab-button {
+  height: calc(100% - 8px);
+  margin: 4px 0 4px 4px;
+  border-radius: var(--border-radius);
+}
+
+/* Terminals Container */
+.terminals-container {
+  flex-grow: 1;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--terminal-bg);
+  width: 100%;
+  height: 100%;
+}
+
+.terminal-instance {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 6px;
+  transition: opacity 0.2s ease-in-out, visibility 0.2s ease-in-out;
+  display: none;
+}
+
+.terminal-instance.active {
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  z-index: 2;
+}
+
+/* Make the terminal fill its container */
+.xterm {
+  width: 100%;
+  height: 100%;
+  transition: font-size 0.2s ease;
+}
+
+/* Status Bar */
+.status-bar {
+  height: var(--status-bar-height);
+  background-color: var(--header-bg);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 12px;
+  border-top: 1px solid var(--border-color);
+  font-size: 12px;
+  transition: background-color var(--transition-speed) ease;
+}
+
+.status-items-left, .status-items-right {
+  display: flex;
+  align-items: center;
+}
+
+.status-item {
+  margin-right: 18px;
+  display: flex;
+  align-items: center;
+}
+
+.status-item::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--accent-color);
+  margin-right: 6px;
+}
+
+.copyable {
+  cursor: pointer;
+  position: relative;
+  border-radius: 4px;
+  padding: 2px 6px;
+  transition: background-color var(--transition-speed) ease;
+}
+
+.copyable:hover {
+  background-color: var(--action-hover);
+}
+
+.copyable:active {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.copyable::after {
+  content: 'Copy';
+  position: absolute;
+  right: -8px;
+  top: -22px;
+  font-size: 10px;
+  background-color: var(--dropdown-bg);
+  color: var(--foreground);
+  padding: 2px 6px;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity var(--transition-speed) ease;
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.copyable:hover::after {
+  opacity: 1;
+}
+
+.copyable.copied::after {
+  content: 'Copied!';
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.status-items-right .status-item {
+  margin-right: 0;
+  margin-left: 18px;
+}
+
+/* Context Menu */
+.context-menu {
+  position: absolute;
+  background-color: var(--dropdown-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+  z-index: 1000;
+  display: none;
+  animation: fadeIn 0.15s ease-in-out;
+  padding: 6px 0;
+  backdrop-filter: blur(10px);
+}
+
+.context-menu.show {
+  display: block;
+}
+
+.context-menu-item {
+  padding: 8px 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  transition: background-color var(--transition-speed) ease, 
+              color var(--transition-speed) ease;
+}
+
+.menu-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 10px;
+  width: 18px;
+  height: 18px;
+  opacity: 0.8;
+  flex-shrink: 0;
+}
+
+.context-menu-item:hover .menu-icon,
+.dropdown-item:hover .menu-icon {
+  opacity: 1;
+}
+
+.context-menu-item:hover {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.context-menu-separator {
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 6px 0;
+  opacity: 0.6;
+}
+
+/* Search Panel */
+.search-panel {
+  position: absolute;
+  top: calc(var(--app-bar-height) + var(--tabs-height) + 10px);
+  right: 20px;
+  z-index: 50;
+  background-color: var(--dropdown-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  display: none;
+  flex-direction: row;
+  align-items: center;
+  padding: 8px;
+  animation: fadeIn 0.2s ease-in-out;
+  backdrop-filter: blur(10px);
+}
+
+.search-panel.show {
+  display: flex;
+}
+
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-right: 8px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--foreground);
+  opacity: 0.6;
+}
+
+#search-input {
+  background-color: var(--background);
+  color: var(--foreground);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 6px 10px 6px 34px;
+  outline: none;
+  width: 240px;
+  transition: border-color var(--transition-speed) ease, 
+              box-shadow var(--transition-speed) ease;
+}
+
+#search-input:focus {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.25);
+}
+
+.search-controls {
+  display: flex;
+  align-items: center;
+}
+
+.search-controls button {
+  background: transparent;
+  border: none;
+  color: var(--foreground);
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-left: 4px;
+  border-radius: 4px;
+  transition: background-color var(--transition-speed) ease, 
+              transform 0.1s ease;
+}
+
+.search-divider {
+  width: 1px;
+  height: 20px;
+  background-color: var(--border-color);
+  margin: 0 4px;
+  opacity: 0.6;
+}
+
+.search-controls button:hover {
+  background-color: var(--action-hover);
+}
+
+.search-controls button:active {
+  transform: scale(0.95);
+}
+
+/* Adding icons to dropdown menu items */
+.dropdown-item .menu-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 10px;
+  width: 18px;
+  height: 18px;
+  opacity: 0.8;
+  flex-shrink: 0;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.4);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.6);
+}
+
+/* Error states */
+.terminal-error-state {
+  background-color: var(--background);
+  border-radius: var(--border-radius);
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+  opacity: 0;
+  animation: fadeIn 0.3s ease forwards;
+}
+
+.terminal-error-state h3 {
+  margin-bottom: 10px;
+  color: #e74c3c;
+}
+
+.terminal-error-state button {
+  padding: 8px 16px;
+  background: var(--accent-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color var(--transition-speed) ease,
+              transform 0.1s ease;
+}
+
+.terminal-error-state button:hover {
+  background: var(--accent-hover);
+}
+
+.terminal-error-state button:active {
+  transform: scale(0.97);
+}
+
+/* Terminal placeholder */
+.terminal-placeholder {
+  background-color: var(--background);
+  border-radius: var(--border-radius);
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+  opacity: 0;
+  animation: fadeIn 0.3s ease forwards;
+}
+
+.terminal-placeholder button {
+  padding: 8px 16px;
+  background: var(--accent-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color var(--transition-speed) ease,
+              transform 0.1s ease;
+}
+
+.terminal-placeholder button:hover {
+  background: var(--accent-hover);
+}
+
+.terminal-placeholder button:active {
+  transform: scale(0.97);
+}
+
+/* Success feedback animation */
+@keyframes success-feedback {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+  20% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+  80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+}
+
+/* Settings Modal Styles */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 2000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  overflow: auto;
+  animation: fade-in 0.2s ease-out;
+}
+
+.modal.show {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-content {
+  background-color: var(--background);
+  border-radius: 8px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+  width: 700px;
+  max-width: 90%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  animation: slide-up 0.3s ease-out;
+  border: 1px solid var(--border-color);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px 20px;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--header-bg);
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  color: var(--foreground);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+.modal-close:hover {
+  color: var(--foreground);
+  opacity: 1;
+}
+
+.modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  max-height: calc(90vh - 130px);
+}
+
+.modal-footer {
+  padding: 15px 20px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  background-color: var(--header-bg);
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+/* Settings Tabs */
+.settings-tabs {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.settings-tab-header {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 20px;
+}
+
+.settings-tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--foreground);
+  opacity: 0.7;
+  padding: 10px 15px;
+  cursor: pointer;
+  font-size: 14px;
+  position: relative;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.settings-tab-btn:hover {
+  color: var(--foreground);
+  opacity: 1;
+}
+
+.settings-tab-btn.active {
+  color: var(--accent-color);
+  opacity: 1;
+  border-bottom: 2px solid var(--accent-color);
+}
+
+.settings-tab-content {
+  flex: 1;
+}
+
+.settings-tab-pane {
+  display: none;
+}
+
+.settings-tab-pane.active {
+  display: block;
+}
+
+/* Settings Items */
+.settings-section {
+  margin-bottom: 25px;
+}
+
+.settings-section h3 {
+  font-size: 16px;
+  margin: 0 0 15px 0;
+  color: var(--foreground);
+  font-weight: 500;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.setting-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.setting-item label {
+  flex: 1;
+  font-size: 14px;
+  color: var(--foreground);
+}
+
+.setting-input {
+  width: 250px;
+  padding: 8px 10px;
+  font-size: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+.setting-input:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 1px rgba(0, 122, 204, 0.3);
+}
+
+input[type="number"].setting-input {
+  width: 100px;
+}
+
+.setting-with-buttons {
+  display: flex;
+  align-items: center;
+  width: 250px;
+}
+
+.icon-button {
+  width: 30px;
+  height: 30px;
+  background: var(--tab-inactive);
+  border: 1px solid var(--border-color);
+  color: var(--foreground);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
+}
+
+.icon-button:hover {
+  background: var(--action-hover);
+}
+
+.setting-with-buttons input {
+  margin: 0 5px;
+  text-align: center;
+  width: 60px;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 24px;
+  z-index: 1;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  z-index: 2;
+  cursor: pointer;
+  margin: 0;
+  /* Make the actual input cover the entire switch */
+  top: 0;
+  left: 0;
+}
+
+.toggle-switch input:focus + .toggle-slider {
+  box-shadow: 0 0 1px var(--accent-color);
+}
+
+.toggle-slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--tab-inactive);
+  border: 1px solid var(--border-color);
+  transition: all 0.4s ease;
+  border-radius: 24px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+  /* Ensure this doesn't block input events */
+  pointer-events: none;
+  z-index: 1;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background-color: var(--foreground);
+  opacity: 0.7;
+  transition: all 0.3s ease;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  /* Ensure this doesn't block input events */
+  pointer-events: none;
+}
+
+.toggle-slider:hover:before {
+  opacity: 0.9;
+}
+
+.toggle-switch input:hover + .toggle-slider:before {
+  opacity: 0.9;
+}
+
+/* Active state for click feedback */
+.toggle-switch input:active + .toggle-slider:before {
+  width: 20px;
+}
+
+input:checked + .toggle-slider {
+  background-color: var(--accent-color);
+  border-color: var(--accent-color);
+}
+
+input:checked + .toggle-slider:before {
+  transform: translateX(26px);
+  background-color: white;
+  opacity: 1;
+  animation: toggle-on 0.25s ease-out;
+}
+
+@keyframes toggle-on {
+  0% { transform: translateX(3px); }
+  50% { transform: translateX(28px); }
+  100% { transform: translateX(26px); }
+}
+
+/* Animation for toggle off */
+input:not(:checked) + .toggle-slider:before {
+  animation: toggle-off 0.25s ease-out;
+}
+
+@keyframes toggle-off {
+  0% { transform: translateX(26px); }
+  50% { transform: translateX(1px); }
+  100% { transform: translateX(3px); }
+}
+
+/* Button Styles */
+.btn {
+  padding: 8px 15px;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.btn-primary {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: var(--accent-hover);
+}
+
+.btn-secondary {
+  background-color: transparent;
+  color: var(--foreground);
+  border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+  background-color: var(--action-hover);
+}
+
+/* Settings Notes */
+.settings-note {
+  font-size: 13px;
+  color: var(--foreground);
+  opacity: 0.7;
+  margin-top: 20px;
+  font-style: italic;
+}
+
+/* Modal Animations */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { 
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Feedback Messages */
+.feedback-message {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100%); /* Initially hidden below */
+  padding: 10px 20px;
+  border-radius: 4px;
+  color: white;
+  z-index: 10000;
+  opacity: 0;
+  transition: opacity var(--animation-duration-normal) ease, transform var(--animation-duration-normal) ease;
+  pointer-events: none; 
+}
+
+.feedback-message.info { background-color: #3498db; }
+.feedback-message.success { background-color: #2ecc71; }
+.feedback-message.error { background-color: #e74c3c; }
+
+.feedback-message-show {
+  opacity: 1 !important;
+  transform: translateX(-50%) translateY(0) !important;
+  pointer-events: auto !important;
+}
+
+.feedback-message-hide {
+  opacity: 0 !important;
+  transform: translateX(-50%) translateY(100%) !important; /* Slide down and fade out */
+  pointer-events: none !important;
+}
+
+/* For new tab creation: applied by JS to trigger appearance */
+.tab-appear-active {
+  opacity: 1 !important; /* Final state */
+  transform: translateY(0) !important; /* Final state */
+  /* Transition is defined on .tab or a more specific state if needed */
+}
+
+/* For tab closing: applied by JS to trigger closing animation */
+.tab-closing-active {
+  opacity: 0 !important;
+  transform: scale(0.9) translateY(-5px) !important; /* Example closing animation */
+  transition: opacity var(--animation-duration-fast) ease, 
+              transform var(--animation-duration-fast) ease !important;
+}
+
+/* Class to prepare for fade-in (set initial state) */
+.terminal-fade-in-prepare {
+    opacity: 0 !important;
+    visibility: visible !important; /* Make it visible so transition can occur */
+    /* display: block !important; Or flex, depending on layout. Ensure it takes space. */
+    z-index: 1; /* Bring to front to fade in over old one if any */
+}
+
+/* Class to trigger fade-in animation */
+.terminal-fade-in-active {
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+  z-index: 2;
+  transition: opacity 0.2s ease-in-out;
+}
+
+/* Class to trigger fade-out animation */
+.terminal-fade-out-active {
+  opacity: 0 !important;
+  visibility: visible !important;
+  z-index: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+
+/* Theme Transition */
+body.theme-transition-active,
+body.theme-transition-active .app-menu-bar,
+body.theme-transition-active .tab,
+body.theme-transition-active .terminal-instance,
+body.theme-transition-active .status-bar, 
+body.theme-transition-active #terminals-container,
+body.theme-transition-active .settings-modal-content,
+body.theme-transition-active input,
+body.theme-transition-active select,
+body.theme-transition-active button,
+body.theme-transition-active #search-panel
+/* Add other specific elements that need smooth theme transitions */
+ {
+  transition: var(--main-transition);
+}
+
+/* Copied Feedback (Example for Session ID) */
+.copied-feedback-active {
+  background-color: #2ecc71 !important; /* Success green */
+  color: white !important;
+  transition: background-color var(--animation-duration-fast) ease, color var(--animation-duration-fast) ease;
+}
+
+/* General purpose animation classes that triggerAnimation can use if needed */
+.animate-highlight {
+    animation: highlight var(--animation-duration-slow) ease-out;
+}
+
+@keyframes highlight {
+    0% { background-color: yellow; }
+    100% { background-color: transparent; }
+}
+
+/* NEW: Terminal Error Placeholder */
+.terminal-error-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: var(--background); /* Use theme background */
+  color: #e74c3c; /* Error color */
+  padding: 20px;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.terminal-error-placeholder h3 {
+  margin-bottom: 10px;
+  font-size: 1.2em;
+  color: var(--foreground); /* Theme foreground for heading */
+}
+
+.terminal-error-placeholder p {
+  margin-bottom: 15px;
+  color: var(--foreground); /* Theme foreground for paragraph */
+  opacity: 0.8;
+}
+
+.terminal-error-placeholder .retry-terminal-error-btn,
+.terminal-error-placeholder .retry-generic-error-btn {
+  padding: 8px 15px;
+  background-color: var(--accent-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color var(--animation-duration-fast) ease;
+}
+
+.terminal-error-placeholder .retry-terminal-error-btn:hover,
+.terminal-error-placeholder .retry-generic-error-btn:hover {
+  background-color: var(--accent-hover);
+}
+
+/* Add loading indicator animation for tabs */
+.loading-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid transparent;
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-left: 4px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Enhanced loading states for tabs */
+.tab.loading-tab {
+  background-color: var(--tab-inactive-dim);
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.tab.loading-tab.loading-extended {
+  background-color: var(--tab-inactive-loading);
+  box-shadow: 0 0 4px var(--accent-color-dim);
+}
+
+/* Terminal fade animations */
+.terminal-instance {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transition: opacity 0.15s ease-in-out, visibility 0.15s ease-in-out;
+  display: none;
+}
+
+.terminal-instance.active {
+  display: block;
+  opacity: 1;
+  visibility: visible;
+  z-index: 2;
+}
+
+.terminal-fade-in-prepare {
+  opacity: 0 !important;
+  visibility: visible !important;
+  display: block !important;
+  z-index: 1;
+}
+
+.terminal-fade-in-active {
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+  z-index: 2;
+}
+
+.terminal-fade-out-active {
+  opacity: 0 !important;
+  visibility: visible !important; /* Keep visible while fading */
+  z-index: 0;
+}
+
+/* Terminal placeholder for error states */
+.terminal-error-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 20px;
+  text-align: center;
+  color: var(--text-color);
+  background-color: var(--terminal-bg);
+}
+
+.terminal-error-placeholder h3 {
+  margin-bottom: 15px;
+  color: var(--error-color);
+}
+
+.terminal-error-placeholder p {
+  margin-bottom: 20px;
+  max-width: 500px;
+}
+
+.terminal-error-placeholder button {
+  padding: 8px 16px;
+  background-color: var(--accent-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s ease;
+}
+
+.terminal-error-placeholder button:hover {
+  background-color: var(--accent-color-hover);
+}
+
+.terminal-error-placeholder button:active {
+  transform: scale(0.98);
+}

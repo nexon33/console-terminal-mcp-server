@@ -1,3 +1,4 @@
+import logger from './logger.js';
 import net from 'net';
 import MCPHandler from './mcp-handler.js'; // Added .js extension
 
@@ -17,21 +18,21 @@ class MCPServer {
 
   start(port) {
     if (this.server) {
-      console.log('MCP server already running');
+      logger.info('MCP server already running');
       return this.server;
     }
 
     // Allow port override via env or CLI, or use random port if not specified
     let chosenPort = port || process.env.MCP_PORT || 0;
     this.server = net.createServer((socket) => {
-      console.log('MCP client connected');
+      logger.info('MCP client connected');
       this.connections.add(socket);
 
       let buffer = '';
 
       socket.on('data', async (data) => {
         const raw = data.toString();
-        console.log('[MCP DEBUG] Raw data received:', JSON.stringify(raw));
+        logger.info('[MCP DEBUG] Raw data received:', JSON.stringify(raw));
         buffer += raw;
 
         // Process complete JSON messages (newline-delimited)
@@ -48,11 +49,11 @@ class MCPServer {
           try {
             // Defensive: Only parse if it looks like JSON
             if (!jsonString.startsWith('{') || !jsonString.endsWith('}')) {
-              console.warn('[MCP DEBUG] Skipping non-JSON line:', jsonString);
+              logger.warn('[MCP DEBUG] Skipping non-JSON line:', jsonString);
               continue;
             }
             const message = JSON.parse(jsonString);
-            console.log('MCP received message type:', message.method);
+            logger.info('MCP received message type:', message.method);
 
             // Process the message
             const response = await this.mcpHandler.handleMessage(message);
@@ -60,7 +61,7 @@ class MCPServer {
             // Send the response
             if (response) {
               const responseStr = JSON.stringify(response) + '\n';
-              console.log('[MCP DEBUG] Sending response:', responseStr);
+              logger.info('[MCP DEBUG] Sending response:', responseStr);
               // Send as LSP Content-Length header framing for maximum compatibility
               const jsonBuffer = Buffer.from(responseStr, 'utf8');
               const header = `Content-Length: ${jsonBuffer.length}\r\n\r\n`;
@@ -68,7 +69,7 @@ class MCPServer {
               socket.write(jsonBuffer);
             }
           } catch (error) {
-            console.error('Error processing MCP message:', error.message);
+            logger.error('Error processing MCP message:', error.message);
 
             // Send error response
             const errorResponse = {
@@ -77,7 +78,7 @@ class MCPServer {
               id: null
             };
             const errorStr = JSON.stringify(errorResponse) + '\n';
-            console.log('[MCP DEBUG] Sending error response:', errorStr);
+            logger.info('[MCP DEBUG] Sending error response:', errorStr);
             // Send as LSP Content-Length header framing for maximum compatibility
             const errBuffer = Buffer.from(errorStr, 'utf8');
             const errHeader = `Content-Length: ${errBuffer.length}\r\n\r\n`;
@@ -91,24 +92,24 @@ class MCPServer {
       });
 
       socket.on('end', () => {
-        console.log('MCP client disconnected');
+        logger.info('MCP client disconnected');
         this.connections.delete(socket);
       });
 
       socket.on('error', (err) => {
-        console.error('MCP socket error:', err.message);
+        logger.error('MCP socket error:', err.message);
         this.connections.delete(socket);
       });
     });
 
     this.server.listen(chosenPort, () => {
       this.port = this.server.address().port;
-      //console.log(`MCP Server listening on port ${this.port}`);
+      logger.info(`MCP Server listening on port ${this.port}`);
       // Optionally write port to a file or env for test clients
     });
 
     this.server.on('error', (err) => {
-      console.error('MCP server error:', err.message);
+      logger.error('MCP server error:', err.message);
     });
 
     return this.server;
@@ -130,7 +131,7 @@ class MCPServer {
       this.server.close();
       this.server = null;
       this.port = null;
-      console.log('MCP server stopped');
+      logger.info('MCP server stopped');
     }
   }
 }
