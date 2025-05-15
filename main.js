@@ -195,6 +195,23 @@ function createOrShowMainWindow() {
     return mainWindow;
   }
   
+  // DEBUG: Run a test command with non-zero exit code
+  setTimeout(() => {
+    logger.info('Running test command with non-zero exit code...');
+    const testSessionId = `test_session_${Date.now()}`;
+    createTerminalProcess(testSessionId, "powershell -Command 'Write-Host \"This should fail\"; exit 123'");
+    
+    setTimeout(() => {
+      const session = terminals.get(testSessionId);
+      if (session) {
+        logger.info(`Test session exitCode: ${session.exitCode}`);
+        logger.info(`Test session buffer: ${JSON.stringify(session.buffer)}`);
+      } else {
+        logger.info('Test session not found');
+      }
+    }, 3000); // Check after 3 seconds
+  }, 5000); // Wait 5 seconds after window creation
+  
   // Create the main window
   mainWindow = new BrowserWindow({
     width: 900,
@@ -376,21 +393,62 @@ function createTerminalProcess(sessionId, command = null) {
     
     // Handle terminal output
     term.onData(data => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('pty-output', { sessionId, data });
-      }
-      
+      // Add to session buffer first to ensure exit code is captured in MCP output
       const session = terminals.get(sessionId);
       if (session) {
         session.buffer += data;
         outputBuffer += data;
         
-        // Check for our exit code marker
-        const markerMatch = outputBuffer.match(/__EXITCODE_MARK__:(-?\\d+)/);
+        // Check for our exit code marker with enhanced logging
+        logger.info(`[Session ${sessionId}] Processing data chunk: ${data.includes('__EXITCODE_MARK__') ? 'Contains marker' : 'No marker'}`);
+        
+        // Log the full outputBuffer for debugging
+        if (data.includes('__EXITCODE_MARK__')) {
+          logger.info(`[Session ${sessionId}] Raw data with marker: "${data.replace(/\r/g, '\\r').replace(/\n/g, '\\n')}"`);
+        }
+        
+        const markerMatch = data.match(/__EXITCODE_MARK__:(-?\d+)/);
         if (markerMatch) {
-          session.exitCode = parseInt(markerMatch[1], 10);
+          const exitCode = parseInt(markerMatch[1], 10);
+          logger.info(`[Session ${sessionId}] Exit code marker found: ${exitCode} (matched: ${markerMatch[0]})`);
+          session.exitCode = exitCode;
           // Remove everything up to and including the marker from the buffer
           outputBuffer = outputBuffer.slice(outputBuffer.indexOf(markerMatch[0]) + markerMatch[0].length);
+          
+          logger.info(`[Session ${sessionId}] Updated exitCode to: ${session.exitCode}`);
+        }
+      }
+      
+      // Check for exitmark output and filter it before sending to UI
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        // Filter out exit marker lines but keep everything else
+        if (data.includes('__exitmark') || data.includes('__EXITCODE_MARK__:')) {
+          // Split by lines to preserve other content like prompts
+          // PowerShell can use \r\n or just \r for line endings
+          const lines = data.split(/\r\n|\r/);
+          const filteredLines = lines.filter(line => {
+            // More precise filtering: check if line contains EXACTLY "__exitmark" or starts with "__EXITCODE_MARK__:"
+            const isExitMarkLine = line.trim() === '__exitmark';
+            const isExitCodeLine = line.trim().startsWith('__EXITCODE_MARK__:');
+            const result = !isExitMarkLine && !isExitCodeLine;
+            return result;
+          });
+          
+          // Only send filtered content if there's anything left
+          if (filteredLines.length > 0) {
+            const filteredData = filteredLines.join('\r\n');
+            mainWindow.webContents.send('pty-output', { sessionId, data: filteredData });
+          } else if (data.includes('PS ') && data.includes('>')) {
+            // This might be just the PS prompt, we should preserve it
+            // Extract the prompt part from the data
+            const match = data.match(/PS [^>]*>/);
+            if (match) {
+              mainWindow.webContents.send('pty-output', { sessionId, data: match[0] });
+            }
+          }
+        } else {
+          // If no exit markers, send as is
+          mainWindow.webContents.send('pty-output', { sessionId, data });
         }
       }
     });
@@ -420,7 +478,7 @@ function createTerminalProcess(sessionId, command = null) {
       if (os.platform() === 'win32') {
         try {
           // Define the __exitmark function at the start of the session
-          term.write("function __exitmark { $code = if ($LASTEXITCODE -ne $null) { $LASTEXITCODE } elseif ($?) { 0 } else { 1 }; echo __EXITCODE_MARK__:$code }\r");
+          term.write("function __exitmark { $code = if ($LASTEXITCODE -ne $null) { Write-Host \"DEBUG: LASTEXITCODE=$LASTEXITCODE\" -ForegroundColor Yellow; $LASTEXITCODE } elseif ($?) { Write-Host \"DEBUG: Command succeeded ($$=true), using code 0\" -ForegroundColor Yellow; 0 } else { Write-Host \"DEBUG: Command failed ($$=false), using code 1\" -ForegroundColor Yellow; 1 }; Write-Host \"__EXITCODE_MARK__:$code\" }\r");
           term.write("clear\r");
           term.write(`${command}\r`);
           term.write("__exitmark\r");
@@ -638,10 +696,29 @@ function startCompletionCheck(session, sessionId) { // Added sessionId parameter
         if (session.status === 'running') {
           session.status = finalStatus;
         }
+        
+        // Clean the raw buffer and then append the exit code for MCP output
+        let cleanedBuffer = session.buffer;
+        const lines = cleanedBuffer.split(/\r\n|\r/);
+        const filteredLines = lines.filter(line => 
+          !line.includes('__exitmark') && !line.includes('__EXITCODE_MARK__:')
+        );
+        let mcpOutput = filteredLines.join('\r\n');
+
+        if (session.exitCode !== null && session.exitCode !== undefined) {
+          // Ensure the Exit Code is on a new line
+          if (mcpOutput.length > 0 && !mcpOutput.endsWith('\n') && !mcpOutput.endsWith('\r')) {
+            mcpOutput += '\r\n'; // Add a newline if the cleaned output isn't empty and doesn't end with one
+          } else if (mcpOutput.length === 0) {
+            // If output is empty, no preceding newline is needed
+          } 
+          mcpOutput += `Exit Code: ${session.exitCode}\r\n`;
+        }
+        
         resolve({
           sessionId: session.sessionId,
           command: session.command,
-          output: session.buffer, // Full buffer on normal completion
+          output: mcpOutput,
           status: finalStatus,
           startTime: session.startTime,
           exitCode: session.exitCode,
@@ -701,21 +778,75 @@ apiServer.post('/execute', async (req, res) => {
 
     // Wait for command completion and get output
     try {
+      logger.info(`Before waitForCommandCompletion for session ${sessionId}`);
       const result = await waitForCommandCompletion(sessionId);
-      res.json(result);
+      logger.info(`After waitForCommandCompletion for session ${sessionId}, exitCode=${result.exitCode}`);
+      
+      // Clean and append the exit code regardless of result.exitCode
+      // First clean any existing exit markers from the output
+      let outputLines = result.output.split(/\r\n|\r/);
+      outputLines = outputLines.filter(line => 
+        !line.includes('__exitmark') && !line.includes('__EXITCODE_MARK__:')
+      );
+      let cleanOutput = outputLines.join('\r\n');
+      
+      // Get the exit code either from result or from session directly
+      const session = terminals.get(sessionId);
+      const exitCodeValue = result.exitCode !== null && result.exitCode !== undefined 
+        ? result.exitCode 
+        : (session && session.exitCode !== null && session.exitCode !== undefined 
+            ? session.exitCode 
+            : 0); // Default to 0 if we can't determine it
+      
+      // Then ensure the Exit Code line is appended
+      if (cleanOutput.length > 0 && !cleanOutput.endsWith('\n') && !cleanOutput.endsWith('\r')) {
+        cleanOutput += '\r\n';
+      }
+      cleanOutput += `Exit Code: ${exitCodeValue}\r\n`;
+      
+      // Create a modified result with the clean output and exit code
+      const modifiedResult = {
+        ...result,
+        output: cleanOutput,
+        exitCode: exitCodeValue
+      };
+      
+      logger.info(`About to send response for session ${sessionId}, exitCode=${exitCodeValue}`);
+      res.json(modifiedResult);
     } catch (error) {
       // If we get a timeout or other error, still return the session info
       const session = terminals.get(sessionId);
       if (session) {
-        res.status(500).json({
+        logger.info(`Error handler for session ${sessionId}, exitCode=${session.exitCode}`);
+        
+        // Get exit code from session or default to 0
+        const exitCodeValue = session.exitCode !== null && session.exitCode !== undefined 
+          ? session.exitCode 
+          : 0;
+        
+        // Clean output and force exit code
+        let outputLines = session.buffer.split(/\r\n|\r/);
+        outputLines = outputLines.filter(line => 
+          !line.includes('__exitmark') && !line.includes('__EXITCODE_MARK__:')
+        );
+        let cleanOutput = outputLines.join('\r\n');
+        
+        if (cleanOutput.length > 0 && !cleanOutput.endsWith('\n') && !cleanOutput.endsWith('\r')) {
+          cleanOutput += '\r\n';
+        }
+        cleanOutput += `Exit Code: ${exitCodeValue}\r\n`;
+        
+        const errorResult = {
           sessionId,
           command: session.command,
-          output: session.buffer,
+          output: cleanOutput,
           status: session.status,
           startTime: session.startTime,
-          exitCode: session.exitCode,
+          exitCode: exitCodeValue,
           error: error.message
-        });
+        };
+        
+        res.status(500).json(errorResult);
       } else {
         logger.error('Error executing command:', error);
         res.status(500).json({ error: error.message || 'Failed to execute command' });
@@ -760,7 +891,7 @@ apiServer.post('/execute/:sessionId', async (req, res) => {
       session.process.write("__exitmark\r");
     } else {
       session.process.write(`${command}\r`);
-      session.process.write("echo __EXITCODE_MARK__:$?\r"); // Unix equivalent
+      session.process.write("echo -e \"\\e[49m\\e[39m__EXITCODE_MARK__:$?\\e[0m\"\r"); // Unix equivalent with invisible output
     }
     
     // Update session command history
@@ -769,21 +900,75 @@ apiServer.post('/execute/:sessionId', async (req, res) => {
     
     // Wait for command completion and get output
     try {
+      logger.info(`Before waitForCommandCompletion for session ${sessionId} (execute/:sessionId)`);
       const result = await waitForCommandCompletion(sessionId);
-      res.json(result);
+      logger.info(`After waitForCommandCompletion for session ${sessionId}, exitCode=${result.exitCode} (execute/:sessionId)`);
+      
+      // Clean and append the exit code regardless of result.exitCode
+      // First clean any existing exit markers from the output
+      let outputLines = result.output.split(/\r\n|\r/);
+      outputLines = outputLines.filter(line => 
+        !line.includes('__exitmark') && !line.includes('__EXITCODE_MARK__:')
+      );
+      let cleanOutput = outputLines.join('\r\n');
+      
+      // Get the exit code either from result or from session directly
+      const currentSession = terminals.get(sessionId);
+      const exitCodeValue = result.exitCode !== null && result.exitCode !== undefined 
+        ? result.exitCode 
+        : (currentSession && currentSession.exitCode !== null && currentSession.exitCode !== undefined 
+            ? currentSession.exitCode 
+            : 0); // Default to 0 if we can't determine it
+      
+      // Then ensure the Exit Code line is appended
+      if (cleanOutput.length > 0 && !cleanOutput.endsWith('\n') && !cleanOutput.endsWith('\r')) {
+        cleanOutput += '\r\n';
+      }
+      cleanOutput += `Exit Code: ${exitCodeValue}\r\n`;
+      
+      // Create a modified result with the clean output and exit code
+      const modifiedResult = {
+        ...result,
+        output: cleanOutput,
+        exitCode: exitCodeValue
+      };
+      
+      logger.info(`About to send response for session ${sessionId}, exitCode=${exitCodeValue} (execute/:sessionId)`);
+      res.json(modifiedResult);
     } catch (error) {
       // If we get a timeout or other error, still return the session info
       const currentSession = terminals.get(sessionId);
       if (currentSession) {
-        res.status(500).json({
+        logger.info(`Error handler for session ${sessionId}, exitCode=${currentSession.exitCode} (execute/:sessionId)`);
+        
+        // Get exit code from session or default to 0
+        const exitCodeValue = currentSession.exitCode !== null && currentSession.exitCode !== undefined 
+          ? currentSession.exitCode 
+          : 0;
+        
+        // Clean output and force exit code
+        let outputLines = currentSession.buffer.split(/\r\n|\r/);
+        outputLines = outputLines.filter(line => 
+          !line.includes('__exitmark') && !line.includes('__EXITCODE_MARK__:')
+        );
+        let cleanOutput = outputLines.join('\r\n');
+        
+        if (cleanOutput.length > 0 && !cleanOutput.endsWith('\n') && !cleanOutput.endsWith('\r')) {
+          cleanOutput += '\r\n';
+        }
+        cleanOutput += `Exit Code: ${exitCodeValue}\r\n`;
+        
+        const errorResult = {
           sessionId,
           command: currentSession.command,
-          output: currentSession.buffer,
+          output: cleanOutput,
           status: currentSession.status,
           startTime: currentSession.startTime,
-          exitCode: currentSession.exitCode,
+          exitCode: exitCodeValue,
           error: error.message
-        });
+        };
+        
+        res.status(500).json(errorResult);
       } else {
         logger.error('Error executing command in session:', error);
         res.status(500).json({ error: error.message || 'Failed to execute command in session', sessionId });
@@ -824,14 +1009,33 @@ apiServer.get('/output/:sessionId', (req, res) => {
     }
 
     const session = terminals.get(sessionId);
+    
+    // Clean the raw buffer and then append the exit code for MCP output
+    let cleanedBuffer = session.buffer;
+    const lines = cleanedBuffer.split(/\r\n|\r/);
+    const filteredLines = lines.filter(line => 
+      !line.includes('__exitmark') && !line.includes('__EXITCODE_MARK__:')
+    );
+    let mcpOutput = filteredLines.join('\r\n');
+
+    if (session.exitCode !== null && session.exitCode !== undefined) {
+      // Ensure the Exit Code is on a new line
+      if (mcpOutput.length > 0 && !mcpOutput.endsWith('\n') && !mcpOutput.endsWith('\r')) {
+        mcpOutput += '\r\n'; // Add a newline if the cleaned output isn't empty and doesn't end with one
+      } else if (mcpOutput.length === 0) {
+        // If output is empty, no preceding newline is needed
+      }
+      mcpOutput += `Exit Code: ${session.exitCode}\r\n`;
+    }
+    
     res.json({
       sessionId,
       command: session.command,
-      output: session.buffer,
+      output: mcpOutput,
       status: session.status,
       startTime: session.startTime,
       exitCode: session.exitCode,
-      lastUnblockedOutput: session.lastUnblockedOutput,
+      lastUnblockedOutput: session.lastUnblockedOutput, // This should ideally also be the raw value
       lastUnblockedOutputTimestamp: session.lastUnblockedOutputTimestamp
     });
   } catch (error) {
@@ -961,14 +1165,36 @@ ipcMain.on('terminal-send-current-output', (event, { sessionId, output }) => {
      if (pendingCompletionSignals.has(sessionId)) {
        const { resolve } = pendingCompletionSignals.get(sessionId);
        session.status = 'unblocked_output_sent'; // Set a new status
+       
+       // Clean the unblocked output and then append the exit code for MCP output
+       let cleanedOutput = session.lastUnblockedOutput;
+       if (cleanedOutput) {
+        const lines = cleanedOutput.split(/\r\n|\r/);
+        const filteredLines = lines.filter(line => 
+          !line.includes('__exitmark') && !line.includes('__EXITCODE_MARK__:')
+        );
+        cleanedOutput = filteredLines.join('\r\n');
+       }
+
+       let mcpEarlyOutput = cleanedOutput || '';
+       if (session.exitCode !== null && session.exitCode !== undefined) {
+        // Ensure the Exit Code is on a new line
+        if (mcpEarlyOutput.length > 0 && !mcpEarlyOutput.endsWith('\n') && !mcpEarlyOutput.endsWith('\r')) {
+            mcpEarlyOutput += '\r\n'; // Add a newline if the cleaned output isn't empty and doesn't end with one
+          } else if (mcpEarlyOutput.length === 0) {
+            // If output is empty, no preceding newline is needed
+          }
+         mcpEarlyOutput += `Exit Code: ${session.exitCode}\r\n`;
+       }
+       
        resolve({
          sessionId: session.sessionId,
          command: session.command,
-         output: session.lastUnblockedOutput, // Send only the unblocked output
+         output: mcpEarlyOutput, // Send cleaned output + potential exit code
          status: session.status,
          startTime: session.startTime,
-         exitCode: null, // Exit code is not yet known
-         lastUnblockedOutput: session.lastUnblockedOutput,
+         exitCode: session.exitCode, // Pass the actual exit code if known at this stage
+         lastUnblockedOutput: session.lastUnblockedOutput, // Send raw unblocked output for this specific field
          lastUnblockedOutputTimestamp: session.lastUnblockedOutputTimestamp
        });
        pendingCompletionSignals.delete(sessionId); // Clean up
