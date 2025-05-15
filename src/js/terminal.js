@@ -4,6 +4,7 @@
 import themes from './themes.js';
 import { initializeAllEventListeners } from './event-handler.js'; // Added import
 import * as animations from './animation-handler.js'; // Import animation handler
+import * as errorHandler from './error-handler.js'; // Import error handler
 
 document.addEventListener('DOMContentLoaded', async () => {
   // Global variables
@@ -14,20 +15,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // NEW: Local feedback message display function using animation-handler
   /**
-   * Displays a feedback message to the user.
+   * Displays a feedback message to the user (for non-errors).
+   * Error messages should use errorHandler.showError.
    * @param {string} message The message to display.
-   * @param {'info' | 'success' | 'error'} type The type of message (info, success, error).
+   * @param {'info' | 'success'} type The type of message.
    * @param {number} [duration=3000] How long to display the message (ms).
    */
   function showFeedback(message, type = 'info', duration = 3000) {
+    if (type === 'error') { // Route errors to the new handler
+      errorHandler.showError(message, 'error');
+      return;
+    }
     const feedbackElement = document.createElement('div');
     feedbackElement.className = `feedback-message ${type}`;
     feedbackElement.textContent = message;
     document.body.appendChild(feedbackElement);
-
     animations.animateFeedbackMessageShow(feedbackElement, duration);
-    // animateFeedbackMessageShow now handles its own hide via animateFeedbackMessageHide
-    // and animateFeedbackMessageHide will remove the element.
   }
   
   // Initialize event listeners - This function will be removed
@@ -104,11 +107,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       terminal.fitAddon.fit();
     });
     
-    if (delta > 0) {
-      showFeedback(`Font size increased to ${currentFontSize}px`, 'info');
-    } else {
-      showFeedback(`Font size decreased to ${currentFontSize}px`, 'info');
-    }
+    showFeedback(`Font size ${delta > 0 ? 'increased' : 'decreased'} to ${currentFontSize}px`, 'info');
   }
   
   // Toggle menu bar
@@ -133,51 +132,41 @@ document.addEventListener('DOMContentLoaded', async () => {
     tabsContainer.insertBefore(loadingTab, newTabButton);
     
     // Request a new terminal from the main process
-    window.api.createTerminal().then(sessionIdOrError => {
-      // Remove loading indicator
-      if (loadingTab.parentNode) {
-        loadingTab.parentNode.removeChild(loadingTab);
-      }
-      
-      // Check if we got an error object back
-      if (sessionIdOrError && typeof sessionIdOrError === 'object' && sessionIdOrError.error) {
-        console.error('Error creating terminal:', sessionIdOrError.message);
-        
-        // Show error message to user
-        showFeedback(`Terminal error: ${sessionIdOrError.message || 'Failed to create terminal process'}`, 'error');
-        
-        // Try to reuse existing terminal if available
-        if (activeTerminalId && terminals[activeTerminalId]) {
-          setActiveTerminal(activeTerminalId);
-          return;
+    const attemptCreation = () => {
+      window.api.createTerminal().then(sessionIdOrError => {
+        if (loadingTab.parentNode) {
+          loadingTab.parentNode.removeChild(loadingTab);
         }
         
-        // If no existing terminal, try one more time with delay
-        setTimeout(() => {
-          window.api.createTerminal().then(secondAttemptSession => {
-            if (secondAttemptSession && typeof secondAttemptSession !== 'object') {
-              createTerminalForSession(secondAttemptSession);
-            } else {
-              console.error('Second attempt to create terminal failed');
-            }
-          }).catch(err => {
-            console.error('Second attempt error:', err);
-          });
-        }, 1000);
-        
-        return;
-      }
-      
-      // Normal case - we got a valid session ID
-      createTerminalForSession(sessionIdOrError);
-    }).catch(err => {
-      console.error('Error creating terminal:', err);
-      // Remove loading indicator on error
-      if (loadingTab.parentNode) {
-        loadingTab.parentNode.removeChild(loadingTab);
-      }
-      showFeedback('Failed to create terminal', 'error');
-    });
+        if (sessionIdOrError && typeof sessionIdOrError === 'object' && sessionIdOrError.error) {
+          const errorDetails = {
+            message: sessionIdOrError.message || 'Failed to create terminal process'
+          };
+          // No specific terminal container or tab exists yet for this error.
+          // Use a generic placeholder if no terminals are open, or just show a notification.
+          if (Object.keys(terminals).length === 0) {
+            const terminalsContainer = document.getElementById('terminals-container');
+            errorHandler.createGenericErrorPlaceholder(
+              terminalsContainer,
+              errorDetails.message,
+              () => createNewTerminal() // Retry by calling createNewTerminal again
+            );
+          } else {
+            errorHandler.showError(`Terminal error: ${errorDetails.message}`, 'error');
+          }
+          errorHandler.logError('Error creating terminal', { initialError: sessionIdOrError });
+          return; 
+        }
+        createTerminalForSession(sessionIdOrError);
+      }).catch(err => {
+        if (loadingTab.parentNode) {
+          loadingTab.parentNode.removeChild(loadingTab);
+        }
+        errorHandler.showSystemError(null, 'Failed to communicate with main process for new terminal.');
+        errorHandler.logError('Error creating terminal via API', { originalError: err });
+      });
+    };
+    attemptCreation();
   }
   
   // Create a terminal for a session ID
@@ -323,11 +312,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       <span class="tab-close">×</span>
     `;
     
-    // Add appear animation
-    // tab.style.opacity = '0'; // Handled by animateTabAppear or CSS base style for tabs
-    // tab.style.transform = 'translateY(-10px)'; // Handled by animateTabAppear or CSS
-    // tab.style.transition = 'opacity 0.3s ease, transform 0.3s ease'; // CSS should handle this
-
     // Insert before the new tab button
     tabsContainer.insertBefore(tab, newTabButton);
     
@@ -693,7 +677,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   // Helper function to remove a terminal
-  function removeTerminal(sessionId) {
+  function removeTerminal(sessionId, force = false) {
     if (!terminals[sessionId]) return;
     
     try {
@@ -702,6 +686,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       // UI cleanup is handled by the onTerminalCloseResponse event handler
       // This function now just initiates the close request to the main process
+      if (force) {
+        const container = terminals[sessionId].container;
+        if (container && container.parentNode) {
+          container.parentNode.removeChild(container);
+        }
+        const tab = document.getElementById(`tab-${sessionId}`);
+        if (tab && tab.parentNode) {
+          tab.parentNode.removeChild(tab);
+        }
+        terminals[sessionId].term.dispose();
+        delete terminals[sessionId];
+      }
     } catch (err) {
       console.error(`Error initiating removal of terminal ${sessionId}:`, err);
       
@@ -733,7 +729,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Navigate to the next tab
   function navigateToNextTab() {
-    const sessionIds = Object.keys(terminals);
+    const sessionIds = Object.keys(terminals).filter(id => terminals[id] && !terminals[id].exited);
     if (sessionIds.length <= 1) return;
     
     const currentIndex = sessionIds.indexOf(activeTerminalId);
@@ -743,7 +739,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Navigate to the previous tab
   function navigateToPreviousTab() {
-    const sessionIds = Object.keys(terminals);
+    const sessionIds = Object.keys(terminals).filter(id => terminals[id] && !terminals[id].exited);
     if (sessionIds.length <= 1) return;
     
     const currentIndex = sessionIds.indexOf(activeTerminalId);
