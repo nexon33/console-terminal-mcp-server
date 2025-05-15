@@ -677,12 +677,18 @@ function initTerminalEventsFromMain() {
   });
 
   window.api.onSessionId && window.api.onSessionId((sessionId) => {
-    if (TI.terminals && !TI.terminals[sessionId]) { // Check TI.terminals
-      TI.createTerminalForSession(sessionId);
-    }
-    TI.setActiveTerminal(sessionId);
-    const sessionIdElement = document.getElementById('session-id-value');
-    if (sessionIdElement) sessionIdElement.textContent = sessionId;
+    // The terminal creation and activation are handled by the promise resolution
+    // of window.api.createTerminal() in terminal.js, which calls createTerminalForSession.
+    // createTerminalForSession, in turn, calls setActiveTerminal and updateTerminalInfo (which updates the session ID display).
+    // This event listener is likely redundant for those actions.
+    console.log(`[EventHandler] Received 'session-id' event for session: ${sessionId}. Terminal creation/activation/UI update should be handled by the invoke promise path.`);
+
+    // if (TI.terminals && !TI.terminals[sessionId]) { // Check TI.terminals
+    //   TI.createTerminalForSession(sessionId); // PREVIOUSLY CAUSED DUPLICATION
+    // }
+    // TI.setActiveTerminal(sessionId); // PREVIOUSLY CAUSED/COULD CAUSE PREMATURE ACTIVATION
+    // const sessionIdElement = document.getElementById('session-id-value');
+    // if (sessionIdElement) sessionIdElement.textContent = sessionId; // UI UPDATE - handled by updateTerminalInfo via createTerminalForSession
   });
 
   window.api.onTerminalCloseResponse && window.api.onTerminalCloseResponse(({ sessionId, success, error }) => {
@@ -709,6 +715,21 @@ function initTerminalEventsFromMain() {
             }
         }
     }
+  });
+
+  // Handler for terminal created event (e.g., from main process after API call)
+  window.api.onTerminalCreated((sessionId) => {
+    // The createTerminalForSession call is now handled by the promise resolution
+    // of the window.api.createTerminal() invoke in terminal.js.
+    // This event can be used for other UI updates if needed in the future,
+    // but should not duplicate the terminal creation logic.
+    console.log(`[EventHandler] Received terminal:created event for session: ${sessionId}. Creation is handled by invoke promise.`);
+    // if (terminalInterface && typeof terminalInterface.createTerminalForSession === 'function') {
+    //   console.log(`[EventHandler] Received terminal:created event for session: ${sessionId}. Forwarding to createTerminalForSession.`);
+    //   terminalInterface.createTerminalForSession(sessionId); // PREVIOUSLY CAUSED DUPLICATION
+    // } else {
+    //   console.warn(`[EventHandler] Terminal interface or createTerminalForSession not available for session: ${sessionId}`);
+    // }
   });
 }
 

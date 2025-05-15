@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let activeTerminalId = null;
   let currentFontSize = 14;
   let currentTheme = 'dark';
+  let isCreatingTerminalInProgress = false; // MODIFIED: Added guard flag
   
   // NEW: Local feedback message display function using animation-handler
   /**
@@ -120,6 +121,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Create a new terminal tab
   function createNewTerminal() {
+    if (isCreatingTerminalInProgress) {
+      console.warn("createNewTerminal: Creation already in progress. Ignoring subsequent call.");
+      // Optionally, provide user feedback:
+      // showFeedback("A new terminal is already being created.", "info", 2000);
+      return;
+    }
+    isCreatingTerminalInProgress = true;
+
     // Add loading indicator to tab bar
     const tabsContainer = document.getElementById('tabs');
     const loadingTab = document.createElement('div');
@@ -132,85 +141,75 @@ document.addEventListener('DOMContentLoaded', async () => {
     tabsContainer.insertBefore(loadingTab, newTabButton);
     
     // Request a new terminal from the main process
-    const attemptCreation = () => {
-      // Track if this creation attempt is still valid (not already handled or aborted)
-      let creationAttemptValid = true;
+    const loadingTimeout = setTimeout(() => {
+      if (loadingTab.parentNode) {
+        loadingTab.classList.add('loading-extended');
+      }
+    }, 1000);
+
+    window.api.createTerminal().then(sessionIdOrError => {
+      // Clear the timeout first
+      clearTimeout(loadingTimeout);
+
+      // Remove loading tab if it still exists
+      if (loadingTab.parentNode) {
+        loadingTab.parentNode.removeChild(loadingTab);
+      }
       
-      // If the attempt takes too long, show a more visible loading state
-      const loadingTimeout = setTimeout(() => {
-        if (creationAttemptValid && loadingTab.parentNode) {
-          loadingTab.classList.add('loading-extended');
-        }
-      }, 1000);
-      
-      window.api.createTerminal().then(sessionIdOrError => {
-        // Clear the timeout first
-        clearTimeout(loadingTimeout);
-        
-        // Check if this creation attempt is still relevant
-        if (!creationAttemptValid) return;
-        creationAttemptValid = false;
-        
-        // Remove loading tab if it still exists
-        if (loadingTab.parentNode) {
-          loadingTab.parentNode.removeChild(loadingTab);
-        }
-        
-        if (sessionIdOrError && typeof sessionIdOrError === 'object' && sessionIdOrError.error) {
-          const errorDetails = {
-            message: sessionIdOrError.message || 'Failed to create terminal process'
-          };
-          // No specific terminal container or tab exists yet for this error.
-          // Use a generic placeholder if no terminals are open, or just show a notification.
-          if (Object.keys(terminals).length === 0) {
-            const terminalsContainer = document.getElementById('terminals-container');
-            errorHandler.createGenericErrorPlaceholder(
-              terminalsContainer,
-              errorDetails.message,
-              () => createNewTerminal() // Retry by calling createNewTerminal again
-            );
-          } else {
-            errorHandler.showError(`Terminal error: ${errorDetails.message}`, 'error');
-          }
-          errorHandler.logError('Error creating terminal', { initialError: sessionIdOrError });
-          return; 
-        }
-        
-        // If session ID is valid, create the terminal
-        if (sessionIdOrError && typeof sessionIdOrError === 'string') {
-          createTerminalForSession(sessionIdOrError);
-        } else {
-          errorHandler.showError('Invalid session ID received', 'error');
-        }
-      }).catch(err => {
-        // Clear the timeout
-        clearTimeout(loadingTimeout);
-        
-        // Mark attempt as invalid
-        creationAttemptValid = false;
-        
-        // Clean up loading tab
-        if (loadingTab.parentNode) {
-          loadingTab.parentNode.removeChild(loadingTab);
-        }
-        
-        errorHandler.showSystemError(null, 'Failed to communicate with main process for new terminal.');
-        errorHandler.logError('Error creating terminal via API', { originalError: err });
-        
-        // If no terminals exist, show a placeholder with retry button
+      if (sessionIdOrError && typeof sessionIdOrError === 'object' && sessionIdOrError.error) {
+        const errorDetails = {
+          message: sessionIdOrError.message || 'Failed to create terminal process'
+        };
+        // No specific terminal container or tab exists yet for this error.
+        // Use a generic placeholder if no terminals are open, or just show a notification.
         if (Object.keys(terminals).length === 0) {
           const terminalsContainer = document.getElementById('terminals-container');
           errorHandler.createGenericErrorPlaceholder(
             terminalsContainer,
-            'Failed to connect to terminal service. Please try again.',
-            () => createNewTerminal()
+            errorDetails.message,
+            () => createNewTerminal() // Retry by calling createNewTerminal again
           );
+        } else {
+          errorHandler.showError(`Terminal error: ${errorDetails.message}`, 'error');
         }
-      });
-    };
-    
-    // Start terminal creation process
-    attemptCreation();
+        errorHandler.logError('Error creating terminal', { initialError: sessionIdOrError });
+        return; 
+      }
+      
+      // If session ID is valid, create the terminal
+      const actualSessionId = sessionIdOrError ? sessionIdOrError.sessionId : null; // Extract from object
+
+      if (actualSessionId && typeof actualSessionId === 'string') { 
+        createTerminalForSession(actualSessionId);
+      } else {
+        // Log what was actually received for debugging
+        console.error('[Renderer] Received unexpected data instead of session ID object:', sessionIdOrError);
+        errorHandler.showError('Invalid session ID data received from main process', 'error'); 
+      }
+    }).catch(err => {
+      // Clear the timeout
+      clearTimeout(loadingTimeout);
+      
+      // Clean up loading tab
+      if (loadingTab.parentNode) {
+        loadingTab.parentNode.removeChild(loadingTab);
+      }
+      
+      errorHandler.showSystemError(null, 'Failed to communicate with main process for new terminal.');
+      errorHandler.logError('Error creating terminal via API', { originalError: err });
+      
+      // If no terminals exist, show a placeholder with retry button
+      if (Object.keys(terminals).length === 0) {
+        const terminalsContainer = document.getElementById('terminals-container');
+        errorHandler.createGenericErrorPlaceholder(
+          terminalsContainer,
+          'Failed to connect to terminal service. Please try again.',
+          () => createNewTerminal()
+        );
+      }
+    }).finally(() => {
+      isCreatingTerminalInProgress = false; // MODIFIED: Reset the guard flag
+    });
   }
   
   // Create a terminal for a session ID
@@ -1461,17 +1460,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Listen for window-ready event from main process
     let windowReadyReceived = false;
+    let terminalCreationInitiated = false; // MODIFIED: Flag to ensure createNewTerminal is called once on init
+    let fallbackTimeoutId = null; // MODIFIED: To store the timeout ID for clearing
+
+    const createInitialTerminalOnce = () => { // MODIFIED: Helper function
+      if (!terminalCreationInitiated) {
+        terminalCreationInitiated = true;
+        console.log("Initiating initial terminal creation.");
+        createNewTerminal();
+      }
+    };
+
     window.api.onWindowReady(() => {
       console.log("Window is ready, terminal can be safely created");
       windowReadyReceived = true;
-      createNewTerminal();
+      if (fallbackTimeoutId) { // MODIFIED: Clear the timeout if window-ready fires first
+        clearTimeout(fallbackTimeoutId);
+      }
+      createInitialTerminalOnce(); // MODIFIED: Call helper
     });
-    
+
     // Fallback if window-ready event isn't received
-    setTimeout(() => {
+    fallbackTimeoutId = setTimeout(() => { // MODIFIED: Store the timeout ID
       if (!windowReadyReceived) {
         console.log("Window-ready event timeout, creating terminal anyway");
-        createNewTerminal();
+        createInitialTerminalOnce(); // MODIFIED: Call helper
       }
     }, 500);
   }
