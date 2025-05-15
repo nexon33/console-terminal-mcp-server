@@ -27,6 +27,14 @@
   --border-radius: 5px;
   --transition-speed: 180ms;
   --tab-transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --animation-duration-fast: 0.15s;
+  --animation-duration-normal: 0.3s;
+  --animation-duration-slow: 0.5s;
+  --main-transition: background-color var(--animation-duration-normal) ease, 
+                     color var(--animation-duration-normal) ease, 
+                     border-color var(--animation-duration-normal) ease,
+                     fill var(--animation-duration-normal) ease,
+                     stroke var(--animation-duration-normal) ease;
 }
 
 /* Themes */
@@ -345,8 +353,9 @@ body {
   position: relative;
   border-top-left-radius: var(--border-radius);
   border-top-right-radius: var(--border-radius);
-  transition: background-color var(--tab-transition),
-              box-shadow var(--tab-transition);
+  transition: opacity var(--animation-duration-normal) ease, 
+              transform var(--animation-duration-normal) ease, 
+              background-color 0.2s;
   margin-left: 4px;
   box-shadow: 0 0 0 transparent;
 }
@@ -414,12 +423,15 @@ body {
   padding: 6px;
   display: none;
   opacity: 0;
-  transition: opacity 0.2s ease;
+  visibility: hidden;
+  transition: opacity var(--animation-duration-fast) ease-in-out;
 }
 
 .terminal-instance.active {
   display: block;
   opacity: 1;
+  visibility: visible;
+  z-index: 1;
 }
 
 /* Make the terminal fill its container */
@@ -1121,4 +1133,108 @@ input:not(:checked) + .toggle-slider:before {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* Feedback Messages */
+.feedback-message {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100%); /* Initially hidden below */
+  padding: 10px 20px;
+  border-radius: 4px;
+  color: white;
+  z-index: 10000;
+  opacity: 0;
+  transition: opacity var(--animation-duration-normal) ease, transform var(--animation-duration-normal) ease;
+  pointer-events: none; 
+}
+
+.feedback-message.info { background-color: #3498db; }
+.feedback-message.success { background-color: #2ecc71; }
+.feedback-message.error { background-color: #e74c3c; }
+
+.feedback-message-show {
+  opacity: 1 !important;
+  transform: translateX(-50%) translateY(0) !important;
+  pointer-events: auto !important;
+}
+
+.feedback-message-hide {
+  opacity: 0 !important;
+  transform: translateX(-50%) translateY(100%) !important; /* Slide down and fade out */
+  pointer-events: none !important;
+}
+
+/* For new tab creation: applied by JS to trigger appearance */
+.tab-appear-active {
+  opacity: 1 !important; /* Final state */
+  transform: translateY(0) !important; /* Final state */
+  /* Transition is defined on .tab or a more specific state if needed */
+}
+
+/* For tab closing: applied by JS to trigger closing animation */
+.tab-closing-active {
+  opacity: 0 !important;
+  transform: scale(0.9) translateY(-5px) !important; /* Example closing animation */
+  transition: opacity var(--animation-duration-fast) ease, 
+              transform var(--animation-duration-fast) ease !important;
+}
+
+/* Class to prepare for fade-in (set initial state) */
+.terminal-fade-in-prepare {
+    opacity: 0 !important;
+    visibility: visible !important; /* Make it visible so transition can occur */
+    /* display: block !important; Or flex, depending on layout. Ensure it takes space. */
+    z-index: 1; /* Bring to front to fade in over old one if any */
+}
+
+/* Class to trigger fade-in animation */
+.terminal-fade-in-active {
+  opacity: 1 !important;
+  visibility: visible !important;
+  /* Transition is on .terminal-instance */
+}
+
+/* Class to trigger fade-out animation */
+.terminal-fade-out-active {
+  opacity: 0 !important;
+  visibility: hidden !important; /* Hide after transition */
+  z-index: 0; /* Send to back */
+  transition: opacity var(--animation-duration-fast) ease-in-out, 
+              visibility 0s linear var(--animation-duration-fast); /* Hide immediately after opacity transition */
+}
+
+/* Theme Transition */
+body.theme-transition-active,
+body.theme-transition-active .app-menu-bar,
+body.theme-transition-active .tab,
+body.theme-transition-active .terminal-instance,
+body.theme-transition-active .status-bar, 
+body.theme-transition-active #terminals-container,
+body.theme-transition-active .settings-modal-content,
+body.theme-transition-active input,
+body.theme-transition-active select,
+body.theme-transition-active button,
+body.theme-transition-active #search-panel
+/* Add other specific elements that need smooth theme transitions */
+ {
+  transition: var(--main-transition);
+}
+
+/* Copied Feedback (Example for Session ID) */
+.copied-feedback-active {
+  background-color: #2ecc71 !important; /* Success green */
+  color: white !important;
+  transition: background-color var(--animation-duration-fast) ease, color var(--animation-duration-fast) ease;
+}
+
+/* General purpose animation classes that triggerAnimation can use if needed */
+.animate-highlight {
+    animation: highlight var(--animation-duration-slow) ease-out;
+}
+
+@keyframes highlight {
+    0% { background-color: yellow; }
+    100% { background-color: transparent; }
 }
