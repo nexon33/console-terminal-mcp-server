@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/nexon33-console-terminal-mcp-server-badge.png)](https://mseep.ai/app/nexon33-console-terminal-mcp-server)
+
 # Electron Terminal MCP Server
 
 In an ideal world vendors would provide their own MCP integration for the terminal, but in the meantime this project provides a Model Context Protocol (MCP) server that allows clients to interact with a system terminal running within an Electron application. It enables executing commands, managing terminal sessions, and retrieving output programmatically.
